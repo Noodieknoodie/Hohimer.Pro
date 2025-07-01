@@ -1,5 +1,3 @@
-# api/periods/__init__.py
-
 """
 Azure Function for getting available payment periods.
 Used by payment forms to show which periods can be selected.
@@ -10,21 +8,16 @@ import sys
 import os
 from datetime import datetime
 
-# Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../backend'))
-
 from database.database import get_db
-
 
 async def main(req: func.HttpRequest) -> func.HttpResponse:
     """
     Get available periods for payment entry.
-    
     Route: GET /api/periods?client_id={id}&contract_id={id}
     
     Returns list of periods that haven't been paid yet.
     """
-    
     client_id = req.params.get('client_id')
     contract_id = req.params.get('contract_id')
     
@@ -39,7 +32,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         db = get_db()
         
         with db.cursor(commit=False) as cursor:
-            # Get contract payment schedule
+            # Get payment schedule from contract
             cursor.execute("""
                 SELECT payment_schedule
                 FROM contracts
@@ -57,7 +50,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             payment_schedule = row[0]
             is_monthly = payment_schedule.lower() == 'monthly'
             
-            # Get all paid periods for this client
+            # Get all paid periods
             cursor.execute("""
                 SELECT DISTINCT applied_period, applied_year
                 FROM payments
@@ -71,7 +64,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             for row in cursor.fetchall():
                 paid_periods.add((row[0], row[1]))
             
-            # Get the earliest payment to determine start range
+            # Get the earliest payment to determine starting point
             cursor.execute("""
                 SELECT MIN(applied_year) as first_year,
                        MIN(CASE WHEN applied_year = (SELECT MIN(applied_year) FROM payments WHERE client_id = ?)
@@ -89,28 +82,38 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                 start_year = datetime.now().year
                 start_period = 1
             
-            # Generate available periods
+            # Calculate current collection period (one back for arrears)
             current_date = datetime.now()
-            current_year = current_date.year
             
             if is_monthly:
-                current_period = current_date.month
+                if current_date.month == 1:
+                    current_period = 12
+                    current_year = current_date.year - 1
+                else:
+                    current_period = current_date.month - 1
+                    current_year = current_date.year
                 max_period = 12
                 period_names = [
                     'January', 'February', 'March', 'April', 'May', 'June',
                     'July', 'August', 'September', 'October', 'November', 'December'
                 ]
-            else:
-                current_period = (current_date.month - 1) // 3 + 1
+            else:  # Quarterly
+                current_quarter = (current_date.month - 1) // 3 + 1
+                if current_quarter == 1:
+                    current_period = 4
+                    current_year = current_date.year - 1
+                else:
+                    current_period = current_quarter - 1
+                    current_year = current_date.year
                 max_period = 4
                 period_names = ['Q1', 'Q2', 'Q3', 'Q4']
             
+            # Generate available periods
             available_periods = []
-            
-            # Generate periods from start to current
             year = start_year
             period = start_period
             
+            # Generate periods up to current collection period
             while year < current_year or (year == current_year and period <= current_period):
                 if (period, year) not in paid_periods:
                     period_label = f"{period_names[period-1]} {year}"
@@ -132,7 +135,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                 if year > current_year + 1:
                     break
             
-            # Sort by most recent first
+            # Reverse to show most recent first
             available_periods.reverse()
         
         return func.HttpResponse(

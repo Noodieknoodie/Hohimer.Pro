@@ -1,39 +1,25 @@
-PROJECT CONTEXT:
-
-
 # 401(k) Payment Tracking System - Developer Reference
 
 ## Overview
 
 The 401(k) Payment Tracking System is a Teams Tab application that tracks advisor fee payments for 401(k) plans. It replaces manual Excel-based tracking with a streamlined Azure SQL database and web interface, ensuring accurate record-keeping and compliance.
 
-THIS IS A SMALL SCALE APP THAT WILL NOT HAVE CONCURRENT USERS 
-A MICROAPP FOR A LOCAL SMALL FINANCIAL ADVISORY FIRM
-CLIENTS ARE COMPANIES WHO OFFER 401k PLANS TO THEIR EMPLOYEES 
-PROVIDERS ARE THE CUTODIANS WHO THE PLANS LIVE AT
+THIS IS A SMALL SCALE APP THAT WILL NOT HAVE CONCURRENT USERS  
+A MICROAPP FOR A LOCAL SMALL FINANCIAL ADVISORY FIRM  
+CLIENTS ARE COMPANIES WHO OFFER 401k PLANS TO THEIR EMPLOYEES  
+PROVIDERS ARE THE CUSTODIANS WHO THE PLANS LIVE AT  
 WE ARE THE ONES WHO MANAGE THE ACCOUNTS AND CHOOSE INVESTMENTS, ETC.
 
 ## Architecture
 
 - **Platform**: Microsoft Teams Tab (Agent 365 Toolkit)
 - **Database**: Azure SQL Database
-- **Backend**: Python/FastAPI
-- **Frontend**: React/Next.js with Tailwind CSS
+- **api**: Python/Azure Functions
+- **src**: React/Next.js with Tailwind CSS
 - **Environment**: Cloud-hosted via Azure
 
-
-** using Teams Toolkit with Azure Functions, stick with Azure Functions HTTP triggers. Pydantic models still work great for validation in Azure Function **
-
-** IMPORTANT: DONT WASTE TIME DOING JACK SHIT WITH THE DOCUMENT PREVIEW FUNTIONALITY. YOU CAN KEEP THE PREVIEWER NON FUNTIONAL ON THE FRONTEND BUT DONT WORRY ABOUT ANY PDF RENDERING ** 
-
-
-** !! PLEASE NOTE THAT THHIS IS A MERGED CODEBASE IN PROGRESS FROM A PRIOR HACKY VERSION. ONE OF THE BIGGEST CHANGES WAS THE CONVERSION FROM THE PRIOR, SPLIT PERIOD PAYMENT FUNCTIONALITY TO THE NEW SINGLE PERIOD PAYMENT.
-
-ALL PAYMENTS ARE IN AREERS. FOR MONTHLY SCHEDULES THE APPLIED PERIOD IS ONE MOTH PRIOR TO CURRENT
-
-FOR QUARTERLY PAYMENT SCHEDULES ITS ONE QUARTER PRIOR TO CURRENT. 
-
-CURRENT BEING AS OF TODAY **
+**Use Azure Functions with HTTP triggers only. Pydantic models are used for validation.**  
+**Do not implement document preview functionality. The viewer can be non-functional — skip all PDF rendering work.**
 
 ## Database Schema
 
@@ -92,7 +78,7 @@ Joins payments with their linked files for easy document access.
 
 ### Payment Periods
 
-**All payments are in arrears** - fees are collected after the service period ends.
+**All payments are in arrears** — fees are collected after the service period ends.
 
 For a given date (e.g., March 13, 2025):
 - **Monthly contracts**: Collecting for February 2025 (current month - 1)
@@ -101,28 +87,29 @@ For a given date (e.g., March 13, 2025):
 ### Expected Fee Calculation
 
 Expected fees depend on the contract type:
-- **Flat fee contracts**: Expected fee = contract's flat_rate
-- **Percentage fee contracts**: Expected fee = contract's percent_rate × payment's total_assets
-  - If current period assets unavailable, use most recent historical assets
-  - Display indicator when using historical assets
+- **Flat fee contracts**: Expected fee = contract's `flat_rate`
+- **Percentage fee contracts**: Expected fee = `percent_rate × total_assets`
+  - If current period assets are unavailable, fallback to most recent known assets
+  - Show visual indicator when fallback occurs
 
 ### Payment Status Determination
 
 - **Due**: No payment recorded for the current collection period
 - **Paid**: Payment exists for the current collection period
-- No "overdue" status - all unpaid periods are simply "Due"
+- No overdue status — any unpaid period is simply "Due"
 
 ### Missing Payments Identification
 
-Lists all unpaid periods between the last paid period and current collection period.
+Lists all unpaid periods between the last paid period and the current collection period.
 
-Example: If current collection period is Q1 2025 and last payment was for Q2 2024:
-- Missing: Q3 2024, Q4 2024, Q1 2025
+Example: If current collection period is Q1 2025 and last payment was for Q2 2024:  
+Missing = Q3 2024, Q4 2024, Q1 2025
 
 ### Date Formatting Conventions
-- Display dates: "Month Day, Year" (e.g., "March 13, 2025")
+
+- Displayed dates: "Month Day, Year" (e.g., "March 13, 2025")
 - Currency: "$X,XXX.XX" format
-- Database dates: ISO format (YYYY-MM-DD)
+- Database storage: ISO format (YYYY-MM-DD)
 
 ## Data Characteristics
 
@@ -134,148 +121,14 @@ Example: If current collection period is Q1 2025 and last payment was for Q2 202
 
 ## Key Implementation Notes
 
-1. **Period Tracking**: The simplified three-field approach (type/period/year) replaced a complex eight-field system that allowed split payments. Each payment now maps to exactly one period.
-
-2. **Temporal Data**: Most tables include `valid_from` and `valid_to` fields for historical tracking, though currently only active records (valid_to IS NULL) are used.
-
-3. **Triggers**: Database triggers automatically update quarterly and yearly summaries when payments are inserted.
-
-4. **Real-time Updates**: UI should refresh immediately when data changes - no manual refresh required.
-
-5. **File Integration**: OneDrive paths are stored but file access is handled separately. The system tracks metadata only.
+1. **Period Tracking**: Payment records use a simplified three-field system: `applied_period_type`, `applied_period`, and `applied_year`. Each payment maps to exactly one period.
+2. **Temporal Data**: Most tables include `valid_from` and `valid_to` fields for historical tracking. Only records with `valid_to IS NULL` are considered active.
+3. **Triggers**: Database triggers automatically update quarterly and yearly summary tables when new payments are recorded.
+4. **Real-time Updates**: The frontend is expected to update UI state instantly upon any data change — no manual refresh required.
+5. **File Integration**: OneDrive folder paths are stored for clients, but the system only tracks metadata (file presence, names). Rendering or access is handled externally.
 
 ## Connection Details
 
-The application connects to Azure SQL Database. Connection configuration should use standard Azure SQL connection strings with appropriate authentication.
+The application connects to Azure SQL Database. Use standard Azure SQL connection strings with appropriate authentication.
 
-
-
-======== FULL SCHEMA ========
-
-=== TABLES ===
-
-
---- client_files ---
-  - file_id: int(10) [PRIMARY KEY, NOT NULL]
-  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
-  - file_name: nvarchar(255) [NOT NULL]
-  - onedrive_path: nvarchar(500) [NOT NULL]
-  - uploaded_at: datetime [DEFAULT (getdate())]
-
---- client_metrics ---
-  - id: int(10) [PRIMARY KEY, NOT NULL]
-  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
-  - last_payment_date: nvarchar(50)
-  - last_payment_amount: float(53)
-  - last_payment_quarter: int(10)
-  - last_payment_year: int(10)
-  - total_ytd_payments: float(53)
-  - avg_quarterly_payment: float(53)
-  - last_recorded_assets: float(53)
-  - last_updated: nvarchar(50)
-  - next_payment_due: nvarchar(50)
-
---- clients ---
-  - client_id: int(10) [PRIMARY KEY, NOT NULL]
-  - display_name: nvarchar(255) [NOT NULL]
-  - full_name: nvarchar(255)
-  - ima_signed_date: nvarchar(50)
-  - onedrive_folder_path: nvarchar(500)
-  - valid_from: datetime [DEFAULT (getdate())]
-  - valid_to: datetime
-
---- contacts ---
-  - contact_id: int(10) [PRIMARY KEY, NOT NULL]
-  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
-  - contact_type: nvarchar(50) [NOT NULL]
-  - contact_name: nvarchar(255)
-  - phone: nvarchar(50)
-  - email: nvarchar(255)
-  - fax: nvarchar(50)
-  - physical_address: nvarchar(500)
-  - mailing_address: nvarchar(500)
-  - valid_from: datetime [DEFAULT (getdate())]
-  - valid_to: datetime
-
---- contracts ---
-  - contract_id: int(10) [PRIMARY KEY, NOT NULL]
-  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
-  - contract_number: nvarchar(100)
-  - provider_name: nvarchar(255)
-  - contract_start_date: nvarchar(50)
-  - fee_type: nvarchar(50)
-  - percent_rate: float(53)
-  - flat_rate: float(53)
-  - payment_schedule: nvarchar(50)
-  - num_people: int(10)
-  - notes: nvarchar(-1)
-  - valid_from: datetime [DEFAULT (getdate())]
-  - valid_to: datetime
-
---- payment_files ---
-  - payment_id: int(10) [PRIMARY KEY, FK -> payments.payment_id, NOT NULL]
-  - file_id: int(10) [PRIMARY KEY, FK -> client_files.file_id, NOT NULL]
-  - linked_at: datetime [DEFAULT (getdate())]
-
---- payments ---
-  - payment_id: int(10) [PRIMARY KEY, NOT NULL]
-  - contract_id: int(10) [FK -> contracts.contract_id, NOT NULL]
-  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
-  - received_date: nvarchar(50)
-  - total_assets: float(53)
-  - expected_fee: float(53)
-  - actual_fee: float(53)
-  - method: nvarchar(50)
-  - notes: nvarchar(-1)
-  - valid_from: datetime [DEFAULT (getdate())]
-  - valid_to: datetime
-  - applied_period_type: nvarchar(10)
-  - applied_period: int(10)
-  - applied_year: int(10)
-
---- quarterly_summaries ---
-  - id: int(10) [PRIMARY KEY, NOT NULL]
-  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
-  - year: int(10) [NOT NULL]
-  - quarter: int(10) [NOT NULL]
-  - total_payments: float(53)
-  - total_assets: float(53)
-  - payment_count: int(10)
-  - avg_payment: float(53)
-  - expected_total: float(53)
-  - last_updated: nvarchar(50)
-
---- yearly_summaries ---
-  - id: int(10) [PRIMARY KEY, NOT NULL]
-  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
-  - year: int(10) [NOT NULL]
-  - total_payments: float(53)
-  - total_assets: float(53)
-  - payment_count: int(10)
-  - avg_payment: float(53)
-  - yoy_growth: float(53)
-  - last_updated: nvarchar(50)
-
-=== INDEXES ===
-
-- client_metrics: idx_client_metrics_lookup (NONCLUSTERED)
-- contacts: idx_contacts_client_id (NONCLUSTERED)
-- contacts: idx_contacts_type (NONCLUSTERED)
-- contracts: idx_contracts_client_id (NONCLUSTERED)
-- contracts: idx_contracts_provider (NONCLUSTERED)
-- payments: idx_payments_client_id (NONCLUSTERED)
-- payments: idx_payments_contract_id (NONCLUSTERED)
-- payments: idx_payments_date (NONCLUSTERED)
-- quarterly_summaries: idx_quarterly_lookup (NONCLUSTERED)
-- yearly_summaries: idx_yearly_lookup (NONCLUSTERED)
-
-=== TRIGGERS ===
-
-- payments: update_quarterly_after_payment
-- quarterly_summaries: update_yearly_after_quarterly
-
-=== VIEWS ===
-
-- client_payment_status
-- database_firewall_rules
-- payment_file_view
+_See `api/database/database_schema_dump.txt` for full schema._

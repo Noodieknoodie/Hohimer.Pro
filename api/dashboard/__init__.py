@@ -1,5 +1,3 @@
-# api/dashboard/__init__.py
-
 """
 Azure Function for client dashboard data.
 Leverages database views and new schema for aggregated client information.
@@ -10,16 +8,12 @@ import sys
 import os
 from datetime import datetime
 
-# Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../backend'))
-
 from database.database import get_db
-
 
 async def main(req: func.HttpRequest) -> func.HttpResponse:
     """
     Get comprehensive dashboard data for a client.
-    
     Route: GET /api/dashboard/{client_id}
     
     Returns:
@@ -30,7 +24,6 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     - Compliance status
     - Summary metrics
     """
-    
     client_id = req.route_params.get('client_id')
     
     if not client_id:
@@ -45,7 +38,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         dashboard_data = {}
         
         with db.cursor(commit=False) as cursor:
-            # Get client and contract info
+            # Get client and contract data
             cursor.execute("""
                 SELECT c.client_id, c.display_name, c.full_name, c.ima_signed_date,
                        c.onedrive_folder_path,
@@ -73,7 +66,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             
             client_data = dict(zip(columns, row))
             
-            # Structure the response
+            # Build client info
             dashboard_data['client'] = {
                 'client_id': client_data['client_id'],
                 'display_name': client_data['display_name'],
@@ -82,6 +75,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                 'onedrive_folder_path': client_data['onedrive_folder_path']
             }
             
+            # Build contract info
             if client_data['contract_id']:
                 dashboard_data['contract'] = {
                     'contract_id': client_data['contract_id'],
@@ -94,7 +88,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             else:
                 dashboard_data['contract'] = None
             
-            # Get payment status from the view
+            # Get payment status from view
             cursor.execute("""
                 SELECT client_id, display_name, payment_schedule, fee_type,
                        flat_rate, percent_rate, last_payment_date, last_payment_amount,
@@ -111,7 +105,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             if status_row:
                 status_data = dict(zip(status_columns, status_row))
                 
-                # Determine period display based on type
+                # Format current period name
                 if status_data['applied_period_type'] == 'monthly':
                     months = ['January', 'February', 'March', 'April', 'May', 'June',
                              'July', 'August', 'September', 'October', 'November', 'December']
@@ -129,27 +123,20 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                     'expected_fee': status_data['expected_fee']
                 }
                 
-                # Determine compliance based on payment status
-                if status_data['payment_status'] == 'Overdue':
-                    dashboard_data['compliance'] = {
-                        'status': 'non_compliant',
-                        'color': 'red',
-                        'reason': 'Payment overdue'
-                    }
-                elif status_data['payment_status'] == 'Due':
-                    dashboard_data['compliance'] = {
-                        'status': 'compliant',
-                        'color': 'yellow', 
-                        'reason': 'Payment due for current period'
-                    }
-                else:  # Paid
+                # Simple green/yellow compliance - no red
+                if status_data['payment_status'] == 'Paid':
                     dashboard_data['compliance'] = {
                         'status': 'compliant',
                         'color': 'green',
-                        'reason': 'All payments up to date'
+                        'reason': 'Current period paid'
+                    }
+                else:  # 'Due'
+                    dashboard_data['compliance'] = {
+                        'status': 'compliant',
+                        'color': 'yellow', 
+                        'reason': f'Awaiting {current_period_name} payment'
                     }
             else:
-                # No payment status data
                 dashboard_data['payment_status'] = {
                     'status': 'Due',
                     'current_period': None,
@@ -181,7 +168,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             for payment_row in cursor.fetchall():
                 payment_dict = dict(zip(payment_columns, payment_row))
                 
-                # Format period for display
+                # Format period display
                 if payment_dict['applied_period_type'] == 'monthly':
                     months = ['January', 'February', 'March', 'April', 'May', 'June',
                              'July', 'August', 'September', 'October', 'November', 'December']
@@ -193,7 +180,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             
             dashboard_data['recent_payments'] = recent_payments
             
-            # Add metrics from client_metrics
+            # Add metrics
             dashboard_data['metrics'] = {
                 'total_ytd_payments': client_data['total_ytd_payments'],
                 'avg_quarterly_payment': client_data['avg_quarterly_payment'], 
@@ -201,7 +188,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                 'next_payment_due': client_data['next_payment_due']
             }
             
-            # Get summary data if needed
+            # Get quarterly summaries for current year
             current_year = datetime.now().year
             cursor.execute("""
                 SELECT quarter, total_payments, payment_count, avg_payment, expected_total

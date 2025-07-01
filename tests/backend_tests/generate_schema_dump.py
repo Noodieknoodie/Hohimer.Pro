@@ -1,11 +1,23 @@
 import sys
 import os
+from dotenv import load_dotenv
 
 # Add api directory to path
 test_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(os.path.dirname(test_dir))
 api_dir = os.path.join(root_dir, 'api')
 sys.path.insert(0, api_dir)
+
+# Load environment variables from venv directory (Azure Toolkit style)
+env_path = os.path.join(root_dir, 'venv', '.env.local')
+if not os.path.exists(env_path):
+    env_path = os.path.join(root_dir, 'venv', '.env.dev')
+    
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+    print(f"✅ Loaded environment from: {env_path}")
+else:
+    print(f"❌ No environment file found at: {env_path}")
 
 from database import db
 
@@ -110,26 +122,40 @@ def fetch_schema():
     for table_name, index_name, index_type in cursor.fetchall():
         output.append(f"- {table_name}: {index_name} ({index_type})")
 
-    # Triggers
+    # Triggers with full definitions
     output.append("\n=== TRIGGERS ===\n")
     cursor.execute("""
-        SELECT name, OBJECT_NAME(parent_id) AS table_name
-        FROM sys.triggers
-        WHERE is_ms_shipped = 0
-        ORDER BY table_name, name
+        SELECT 
+            t.name AS trigger_name,
+            OBJECT_NAME(t.parent_id) AS table_name,
+            sm.definition
+        FROM sys.triggers t
+        INNER JOIN sys.sql_modules sm ON t.object_id = sm.object_id
+        WHERE t.is_ms_shipped = 0
+        ORDER BY table_name, trigger_name
     """)
-    for trigger_name, table_name in cursor.fetchall():
-        output.append(f"- {table_name}: {trigger_name}")
+    
+    triggers = cursor.fetchall()
+    for trigger_name, table_name, definition in triggers:
+        output.append(f"\n--- TRIGGER: {trigger_name} (on {table_name}) ---")
+        output.append(definition.strip())
 
-    # Views
-    output.append("\n=== VIEWS ===\n")
+    # Views with full definitions
+    output.append("\n\n=== VIEWS ===\n")
     cursor.execute("""
-        SELECT TABLE_NAME
-        FROM INFORMATION_SCHEMA.VIEWS
-        ORDER BY TABLE_NAME
+        SELECT 
+            v.name AS view_name,
+            sm.definition
+        FROM sys.views v
+        INNER JOIN sys.sql_modules sm ON v.object_id = sm.object_id
+        WHERE v.is_ms_shipped = 0
+        ORDER BY v.name
     """)
-    for (view_name,) in cursor.fetchall():
-        output.append(f"- {view_name}")
+    
+    views = cursor.fetchall()
+    for view_name, definition in views:
+        output.append(f"\n--- VIEW: {view_name} ---")
+        output.append(definition.strip())
 
     conn.close()
     return "\n".join(output)

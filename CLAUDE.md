@@ -12,6 +12,8 @@
 7. **Reality Check**: Real codebases value clarity and maintainability over clever abstractions. Write code like someone else will debug it at 3am.
 Remember: The goal is working software, not architectural showcase. Start minimal, iterate based on actual needs.
 
+PS: Tailwind v4 will automatically detect your content files and apply styles. No need for a tailwind.config.js file - it's all CSS-first now. If you need custom theme values, you'd add them directly in your CSS using the @theme directive.
+
 
 -- (see backend/CLAUDE.md and frontend/CLAUDE.md, too, when relevant to do so)
 
