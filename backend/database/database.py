@@ -1,6 +1,7 @@
 import os
 import pyodbc
 import struct
+from pathlib import Path
 from azure.identity import DefaultAzureCredential
 from typing import Optional
 from dotenv import load_dotenv
