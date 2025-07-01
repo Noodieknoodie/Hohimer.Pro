@@ -1,12 +1,23 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'backend', 'database'))
-from database import db
+
+# Add api directory to path
+test_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(test_dir))
+api_dir = os.path.join(root_dir, 'api')
+sys.path.insert(0, api_dir)
+
+from database import get_db
 
 def test_connection():
     print("Testing Azure SQL Database connection...")
-    print(f"Server: {db.connection_string}")
-    print("-" * 50)
+    try:
+        db = get_db()
+        print(f"Server: {db.connection_string}")
+        print("-" * 50)
+    except Exception as e:
+        print(f"Failed to get database instance: {e}")
+        return
     
     try:
         # Test 1: Basic connection

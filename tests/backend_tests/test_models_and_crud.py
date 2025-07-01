@@ -1,10 +1,17 @@
+
 """
 Comprehensive tests for models.py and database CRUD operations.
 Tests all Pydantic models for validation and database operations for each table.
 """
 import os
 import sys
+
+# Add parent directories to path to enable imports
 import pytest
+test_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(test_dir))
+api_dir = os.path.join(root_dir, 'api')
+sys.path.insert(0, api_dir)
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List, Any
@@ -13,12 +20,9 @@ from pydantic import ValidationError
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Load env file from venv directory
+# Load env file from root venv directory (Teams Toolkit location)
 env_path = Path(__file__).parent.parent.parent / 'venv' / '.env.local'
 load_dotenv(env_path)
-
-# Add backend directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../backend')))
 
 from database.models import (
     ClientCreate, ClientUpdate, Client,

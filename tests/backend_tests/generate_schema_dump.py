@@ -1,6 +1,12 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'backend'))
+
+# Add api directory to path
+test_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(test_dir))
+api_dir = os.path.join(root_dir, 'api')
+sys.path.insert(0, api_dir)
+
 from database import db
 
 def fetch_schema():

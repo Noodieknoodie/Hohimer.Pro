@@ -10,9 +10,16 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 import pyodbc
 import struct
+import os
+import sys
 
-# Import after sys.path modification if needed
-from backend.database.database import Database
+# Add api directory to path
+test_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(test_dir))
+api_dir = os.path.join(root_dir, 'api')
+sys.path.insert(0, api_dir)
+
+from database.database import Database
 
 
 class TestDatabase(unittest.TestCase):
@@ -50,7 +57,7 @@ class TestDatabase(unittest.TestCase):
                 Database()
             self.assertIn("Missing required environment variables", str(context.exception))
     
-    @patch('backend.database.database.DefaultAzureCredential')
+    @patch('database.database.DefaultAzureCredential')
     def test_credential_lazy_initialization(self, mock_credential_class):
         """Test that credential is created only when accessed."""
         db = Database()
@@ -66,8 +73,8 @@ class TestDatabase(unittest.TestCase):
             exclude_interactive_browser_credential=False
         )
     
-    @patch('backend.database.database.pyodbc.connect')
-    @patch('backend.database.database.DefaultAzureCredential')
+    @patch('database.database.pyodbc.connect')
+    @patch('database.database.DefaultAzureCredential')
     def test_get_connection_success(self, mock_credential_class, mock_connect):
         """Test successful connection creation."""
         # Setup mocks
@@ -93,8 +100,8 @@ class TestDatabase(unittest.TestCase):
         mock_connect.assert_called_once()
         self.assertEqual(conn, mock_connection)
     
-    @patch('backend.database.database.pyodbc.connect')
-    @patch('backend.database.database.DefaultAzureCredential')
+    @patch('database.database.pyodbc.connect')
+    @patch('database.database.DefaultAzureCredential')
     def test_connection_context_manager(self, mock_credential_class, mock_connect):
         """Test connection context manager properly handles cleanup."""
         # Setup mocks
@@ -117,8 +124,8 @@ class TestDatabase(unittest.TestCase):
         # Verify connection was closed
         mock_connection.close.assert_called_once()
     
-    @patch('backend.database.database.pyodbc.connect')
-    @patch('backend.database.database.DefaultAzureCredential')
+    @patch('database.database.pyodbc.connect')
+    @patch('database.database.DefaultAzureCredential')
     def test_cursor_context_manager_with_commit(self, mock_credential_class, mock_connect):
         """Test cursor context manager with auto-commit."""
         # Setup mocks
@@ -144,8 +151,8 @@ class TestDatabase(unittest.TestCase):
         mock_connection.commit.assert_called_once()
         mock_cursor.close.assert_called_once()
     
-    @patch('backend.database.database.pyodbc.connect')
-    @patch('backend.database.database.DefaultAzureCredential')
+    @patch('database.database.pyodbc.connect')
+    @patch('database.database.DefaultAzureCredential')
     def test_cursor_context_manager_rollback_on_error(self, mock_credential_class, mock_connect):
         """Test cursor context manager rolls back on error."""
         # Setup mocks
