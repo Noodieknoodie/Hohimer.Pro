@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "SQL_SERVER": "hohimerpro-db-server.database.windows.net",
+    "SQL_DATABASE": "HohimerPro-401k",
+    "TEAMSFX_ENV": "local"
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}

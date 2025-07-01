@@ -1,0 +1,13 @@
+*.pyc
+__pycache__/
+.python_packages/
+.venv/
+.vscode/
+.git/
+.gitignore
+local.settings.json
+tests/
+README.md
+.funcignore
+.env*
+*.md

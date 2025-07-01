@@ -1,0 +1,5 @@
+azure-functions
+pyodbc
+pydantic
+azure-identity
+python-dotenv

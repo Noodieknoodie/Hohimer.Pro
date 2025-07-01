@@ -36,6 +36,13 @@ class ClientBase(BaseModel):
     full_name: Optional[str] = Field(None, max_length=255, description="Legal plan name")
     ima_signed_date: Optional[str] = Field(None, max_length=50, description="Investment Management Agreement date")
     onedrive_folder_path: Optional[str] = Field(None, max_length=500, description="Path to client's document folder")
+    
+    @field_validator('display_name')
+    @classmethod
+    def validate_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError('display_name cannot be empty')
+        return v
 
 
 class ClientCreate(ClientBase):

@@ -1,5 +1,7 @@
 {
   "recommendations": [
+    "ms-azuretools.vscode-azurefunctions",
+    "ms-python.python",
     "TeamsDevApp.ms-teams-vscode-extension"
   ]
 }
