@@ -1,0 +1,127 @@
+=== TABLES ===
+
+
+--- client_files ---
+  - file_id: int(10) [PRIMARY KEY, NOT NULL]
+  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
+  - file_name: nvarchar(255) [NOT NULL]
+  - onedrive_path: nvarchar(500) [NOT NULL]
+  - uploaded_at: datetime [DEFAULT (getdate())]
+
+--- client_metrics ---
+  - id: int(10) [PRIMARY KEY, NOT NULL]
+  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
+  - last_payment_date: nvarchar(50)
+  - last_payment_amount: float(53)
+  - last_payment_quarter: int(10)
+  - last_payment_year: int(10)
+  - total_ytd_payments: float(53)
+  - avg_quarterly_payment: float(53)
+  - last_recorded_assets: float(53)
+  - last_updated: nvarchar(50)
+  - next_payment_due: nvarchar(50)
+
+--- clients ---
+  - client_id: int(10) [PRIMARY KEY, NOT NULL]
+  - display_name: nvarchar(255) [NOT NULL]
+  - full_name: nvarchar(255)
+  - ima_signed_date: nvarchar(50)
+  - onedrive_folder_path: nvarchar(500)
+  - valid_from: datetime [DEFAULT (getdate())]
+  - valid_to: datetime
+
+--- contacts ---
+  - contact_id: int(10) [PRIMARY KEY, NOT NULL]
+  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
+  - contact_type: nvarchar(50) [NOT NULL]
+  - contact_name: nvarchar(255)
+  - phone: nvarchar(50)
+  - email: nvarchar(255)
+  - fax: nvarchar(50)
+  - physical_address: nvarchar(500)
+  - mailing_address: nvarchar(500)
+  - valid_from: datetime [DEFAULT (getdate())]
+  - valid_to: datetime
+
+--- contracts ---
+  - contract_id: int(10) [PRIMARY KEY, NOT NULL]
+  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
+  - contract_number: nvarchar(100)
+  - provider_name: nvarchar(255)
+  - contract_start_date: nvarchar(50)
+  - fee_type: nvarchar(50)
+  - percent_rate: float(53)
+  - flat_rate: float(53)
+  - payment_schedule: nvarchar(50)
+  - num_people: int(10)
+  - notes: nvarchar(-1)
+  - valid_from: datetime [DEFAULT (getdate())]
+  - valid_to: datetime
+
+--- payment_files ---
+  - payment_id: int(10) [PRIMARY KEY, FK -> payments.payment_id, NOT NULL]
+  - file_id: int(10) [PRIMARY KEY, FK -> client_files.file_id, NOT NULL]
+  - linked_at: datetime [DEFAULT (getdate())]
+
+--- payments ---
+  - payment_id: int(10) [PRIMARY KEY, NOT NULL]
+  - contract_id: int(10) [FK -> contracts.contract_id, NOT NULL]
+  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
+  - received_date: nvarchar(50)
+  - total_assets: float(53)
+  - expected_fee: float(53)
+  - actual_fee: float(53)
+  - method: nvarchar(50)
+  - notes: nvarchar(-1)
+  - valid_from: datetime [DEFAULT (getdate())]
+  - valid_to: datetime
+  - applied_period_type: nvarchar(10)
+  - applied_period: int(10)
+  - applied_year: int(10)
+
+--- quarterly_summaries ---
+  - id: int(10) [PRIMARY KEY, NOT NULL]
+  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
+  - year: int(10) [NOT NULL]
+  - quarter: int(10) [NOT NULL]
+  - total_payments: float(53)
+  - total_assets: float(53)
+  - payment_count: int(10)
+  - avg_payment: float(53)
+  - expected_total: float(53)
+  - last_updated: nvarchar(50)
+
+--- yearly_summaries ---
+  - id: int(10) [PRIMARY KEY, NOT NULL]
+  - client_id: int(10) [FK -> clients.client_id, NOT NULL]
+  - year: int(10) [NOT NULL]
+  - total_payments: float(53)
+  - total_assets: float(53)
+  - payment_count: int(10)
+  - avg_payment: float(53)
+  - yoy_growth: float(53)
+  - last_updated: nvarchar(50)
+
+=== INDEXES ===
+
+- client_metrics: idx_client_metrics_lookup (NONCLUSTERED)
+- contacts: idx_contacts_client_id (NONCLUSTERED)
+- contacts: idx_contacts_type (NONCLUSTERED)
+- contracts: idx_contracts_client_id (NONCLUSTERED)
+- contracts: idx_contracts_provider (NONCLUSTERED)
+- payments: idx_payments_client_id (NONCLUSTERED)
+- payments: idx_payments_contract_id (NONCLUSTERED)
+- payments: idx_payments_date (NONCLUSTERED)
+- quarterly_summaries: idx_quarterly_lookup (NONCLUSTERED)
+- yearly_summaries: idx_yearly_lookup (NONCLUSTERED)
+
+=== TRIGGERS ===
+
+- payments: update_quarterly_after_payment
+- quarterly_summaries: update_yearly_after_quarterly
+
+=== VIEWS ===
+
+- client_payment_status
+- database_firewall_rules
+- payment_file_view
