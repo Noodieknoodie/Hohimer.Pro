@@ -123,7 +123,9 @@ export interface PeriodsResponse {
   periods: Array<{
     value: string;
     label: string;
-    type: 'monthly' | 'quarterly';
+    period: number;
+    year: number;
+    period_type: 'monthly' | 'quarterly';
   }>;
   payment_schedule: string;
 }
@@ -247,11 +249,15 @@ export const api = {
   },
 };
 
-// Error handling remains the same
-class ApiError extends Error {
+// Error handling with Azure AD auth awareness
+export class ApiError extends Error {
+  public isAuthError: boolean;
+  
   constructor(public status: number, message: string) {
     super(message);
     this.name = 'ApiError';
+    // Check for Azure AD authentication errors
+    this.isAuthError = status === 401 || status === 403;
   }
 }
 
@@ -267,10 +273,19 @@ async function fetchApi<T>(url: string, options: RequestInit = {}): Promise<T> {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new ApiError(
+      const error = new ApiError(
         response.status, 
-        errorData.error || `API error: ${response.statusText}`
+        errorData.error || errorData.message || `API error: ${response.statusText}`
       );
+      
+      // Handle Azure AD auth failures specifically
+      if (error.isAuthError) {
+        console.error('Azure AD authentication failed:', error.message);
+        // In a Teams app, this might trigger a re-authentication flow
+        // For now, we'll just throw the error with auth context
+      }
+      
+      throw error;
     }
 
     if (response.status === 204) {
@@ -281,6 +296,10 @@ async function fetchApi<T>(url: string, options: RequestInit = {}): Promise<T> {
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
+    }
+    // Network errors might also be auth-related in Teams/Azure context
+    if (error instanceof Error && error.message.includes('Failed to fetch')) {
+      throw new ApiError(0, 'Network error: Unable to connect to API. This may be an authentication issue.');
     }
     throw new Error('Network error: Unable to connect to API');
   }

@@ -22,6 +22,20 @@ export const formatDate = (dateInput, formatStr = 'MMM d, yyyy') => {
  */
 export const formatAppliedPeriod = (payment) => {
   if (!payment) return 'N/A';
+  
+  // New format: applied_period_type, applied_period, applied_year
+  if (payment.applied_period_type && payment.applied_period && payment.applied_year) {
+    if (payment.applied_period_type === 'quarterly') {
+      return `Q${payment.applied_period} ${payment.applied_year}`;
+    } else if (payment.applied_period_type === 'monthly') {
+      const monthIndex = payment.applied_period - 1;
+      if (monthIndex >= 0 && monthIndex < 12) {
+        return `${MONTH_NAMES[monthIndex]} ${payment.applied_year}`;
+      }
+    }
+  }
+  
+  // Legacy format fallback
   if (payment.applied_start_quarter) {
     return `Q${payment.applied_start_quarter} ${payment.applied_start_quarter_year}`;
   }

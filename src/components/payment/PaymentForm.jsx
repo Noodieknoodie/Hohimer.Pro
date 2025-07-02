@@ -25,8 +25,7 @@ const PaymentForm = ({ clientId, editingPayment, onEditingPaymentChange }) => {
   const {
     formValues,
     resetForm,
-    handleInputChange,
-    handleSplitToggle
+    handleInputChange
   } = usePaymentFormState(clientId, contract, periodsData, editingPayment, setIsFormDirty);
 
   const {
@@ -144,7 +143,6 @@ const PaymentForm = ({ clientId, editingPayment, onEditingPaymentChange }) => {
               <PaymentFormFields
                 formValues={formValues}
                 handleInputChange={handleInputChangeWithValidation}
-                handleSplitToggle={handleSplitToggle}
                 periodOptions={periodsData}
                 isDisabled={isDisabled}
                 isPeriodsLoading={isPeriodsLoading}

@@ -22,28 +22,23 @@ const ComplianceCard = ({ dashboardData, isLoading }) => {
     );
   }
 
-  // Use data from dashboard API instead of local calculations
-  const overduePeriods = dashboardData?.payment_status?.overdue_periods || [];
-  const hasOverduePeriods = overduePeriods.length > 0;
-  const currentStatus = dashboardData?.payment_status?.current_status || 'Due';
+  // Use data from dashboard API
+  const paymentStatus = dashboardData?.payment_status?.status || 'Due';
   const currentPeriod = dashboardData?.payment_status?.current_period || 'N/A';
+  const compliance = dashboardData?.compliance;
   const contract = dashboardData?.contract;
   const client = dashboardData?.client;
 
-  // Payment status background color
+  // Payment status background color (binary: green or yellow)
   const getStatusBgColor = () => {
-    if (hasOverduePeriods || currentStatus === 'Overdue') return 'bg-red-50 border-red-200 text-red-700';
-    if (currentStatus === 'Due') return 'bg-yellow-50 border-yellow-200 text-yellow-700';
-    if (currentStatus === 'Current') return 'bg-green-50 border-green-200 text-green-700';
-    return 'bg-green-50 border-green-200 text-green-700'; // Default to green
+    if (paymentStatus === 'Paid') return 'bg-green-50 border-green-200 text-green-700';
+    return 'bg-yellow-50 border-yellow-200 text-yellow-700'; // Due
   };
 
   // Payment status text
   const getStatusText = () => {
-    if (hasOverduePeriods) return 'Payment Overdue';
-    if (currentStatus === 'Due') return 'Payment Due';
-    if (currentStatus === 'Current') return 'Up to Date';
-    return currentStatus; // Use whatever the backend provides
+    if (paymentStatus === 'Paid') return 'Up to Date';
+    return 'Payment Due';
   };
 
   // Get last recorded AUM for fee reference calculations
@@ -60,34 +55,23 @@ const ComplianceCard = ({ dashboardData, isLoading }) => {
         <div className="flex-1">
           <div className={`rounded border p-3 ${getStatusBgColor()}`}>
             <div className="flex items-center gap-2">
-              <StatusIcon status={hasOverduePeriods || currentStatus === 'Overdue' ? "red" : (currentStatus === 'Due' ? "yellow" : "green")} />
+              <StatusIcon status={paymentStatus === 'Paid' ? "green" : "yellow"} />
               <span className="font-medium">{getStatusText()}</span>
             </div>
             {/* Current Period Status */}
             <div className="mt-2 text-sm">
               <span className="font-medium">Current Period:</span> {currentPeriod}
               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white bg-opacity-50">
-                {currentStatus}
+                {paymentStatus}
               </span>
             </div>
-          </div>
-
-          {/* Overdue Periods */}
-          {hasOverduePeriods && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-dark-600 mb-2">Missing Previous Period</h4>
-              <div className="flex flex-wrap gap-2">
-                {overduePeriods.map((period, index) => (
-                  <span
-                    key={index}
-                    className="px-2 py-1 bg-red-100 text-red-800 rounded-md text-xs font-medium"
-                  >
-                    {period}
-                  </span>
-                ))}
+            {/* Compliance Reason from backend */}
+            {compliance?.reason && (
+              <div className="mt-2 text-sm italic">
+                {compliance.reason}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Contract info */}
           {contract && (
@@ -127,7 +111,7 @@ const ComplianceCard = ({ dashboardData, isLoading }) => {
   );
 };
 
-// Status Icon Component
+// Status Icon Component (binary: green or yellow only)
 const StatusIcon = ({ status }) => {
   if (status === 'green') {
     return (
@@ -137,17 +121,9 @@ const StatusIcon = ({ status }) => {
       </svg>
     );
   }
-  if (status === 'yellow') {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="8" x2="12" y2="12"></line>
-        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-      </svg>
-    );
-  }
+  // Default to yellow for 'Due' status
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
       <circle cx="12" cy="12" r="10"></circle>
       <line x1="12" y1="8" x2="12" y2="12"></line>
       <line x1="12" y1="16" x2="12.01" y2="16"></line>

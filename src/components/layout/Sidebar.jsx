@@ -26,7 +26,7 @@ const Sidebar = ({ clients = [], isLoading = false }) => {
   
   const groupedClients = groupClientsByProvider();
   
-  // Get the status icon based on compliance status
+  // Get the status icon based on compliance status (binary: green or yellow)
   const StatusIcon = ({ status }) => {
     if (status === 'green') {
       return (
@@ -46,7 +46,8 @@ const Sidebar = ({ clients = [], isLoading = false }) => {
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
       );
-    } else if (status === 'yellow') {
+    } else {
+      // Default to yellow for 'Due' status
       return (
         <svg 
           xmlns="http://www.w3.org/2000/svg" 
@@ -59,25 +60,6 @@ const Sidebar = ({ clients = [], isLoading = false }) => {
           strokeLinecap="round" 
           strokeLinejoin="round" 
           className="text-yellow-500"
-        >
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="8" x2="12" y2="12"></line>
-          <line x1="12" y1="16" x2="12.01" y2="16"></line>
-        </svg>
-      );
-    } else {
-      return (
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          width="16" 
-          height="16" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="2" 
-          strokeLinecap="round" 
-          strokeLinejoin="round" 
-          className="text-red-500"
         >
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="8" x2="12" y2="12"></line>

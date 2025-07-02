@@ -7,7 +7,6 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import PaymentTableRow from './PaymentHistory/PaymentTableRow';
-import ExpandedPaymentDetails from './PaymentHistory/ExpandedPaymentDetails';
 import { usePaymentTableState } from './PaymentHistory/usePaymentTableState';
 import useStore from '../../store';
 
@@ -17,11 +16,9 @@ const PaymentHistory = ({ clientId, editingPayment, onEditingPaymentChange }) =>
   const {
     page,
     year,
-    expandedPaymentId,
     showDeleteConfirm,
     setPage,
     setYear,
-    toggleExpandRow,
     confirmDelete,
     cancelDelete,
     getAvailableYears
@@ -119,23 +116,17 @@ const PaymentHistory = ({ clientId, editingPayment, onEditingPaymentChange }) =>
               </thead>
               <tbody className="bg-white divide-y divide-light-300">
                 {payments.map((payment) => (
-                  <React.Fragment key={payment.payment_id}>
-                    <PaymentTableRow
-                      payment={payment}
-                      isExpanded={expandedPaymentId === payment.payment_id}
-                      showDeleteConfirm={showDeleteConfirm}
-                      onToggleExpand={toggleExpandRow}
-                      onEdit={handleEdit}
-                      onViewFile={handleViewFile}
-                      onConfirmDelete={handleDelete}
-                      onCancelDelete={cancelDelete}
-                      onDeleteClick={confirmDelete}
-                      isDeleting={deletePaymentMutation.isLoading}
-                    />
-                    {expandedPaymentId === payment.payment_id && (
-                      <ExpandedPaymentDetails payment={payment} />
-                    )}
-                  </React.Fragment>
+                  <PaymentTableRow
+                    key={payment.payment_id}
+                    payment={payment}
+                    showDeleteConfirm={showDeleteConfirm}
+                    onEdit={handleEdit}
+                    onViewFile={handleViewFile}
+                    onConfirmDelete={handleDelete}
+                    onCancelDelete={cancelDelete}
+                    onDeleteClick={confirmDelete}
+                    isDeleting={deletePaymentMutation.isLoading}
+                  />
                 ))}
               </tbody>
             </table>

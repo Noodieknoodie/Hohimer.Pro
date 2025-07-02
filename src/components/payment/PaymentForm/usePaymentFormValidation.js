@@ -16,12 +16,8 @@ export const usePaymentFormValidation = () => {
       errors.actual_fee = 'Payment amount must be a number';
     }
 
-    if (!formValues.start_period) {
-      errors.start_period = 'Applied period is required';
-    }
-
-    if (formValues.is_split_payment && !formValues.end_period) {
-      errors.end_period = 'End period is required for split payments';
+    if (!formValues.selected_period) {
+      errors.selected_period = 'Applied period is required';
     }
 
     return errors;

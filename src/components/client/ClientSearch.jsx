@@ -108,9 +108,7 @@ const ClientSearch = ({ clients = [], isLoading = false }) => {
                   className={
                     client.compliance_status === 'green'
                       ? 'text-green-500'
-                      : client.compliance_status === 'yellow'
-                        ? 'text-yellow-500'
-                        : 'text-red-500'
+                      : 'text-yellow-500' // Binary: green or yellow only
                   }
                 >
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>

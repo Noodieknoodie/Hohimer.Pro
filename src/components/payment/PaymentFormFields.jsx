@@ -1,13 +1,9 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
 import DatePicker from '../ui/DatePicker';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import { PAYMENT_METHODS } from '../../lib/constants';
 import { formatCurrency } from '../../lib/formatUtils';
-import { formatDate } from '../../lib/dateUtils';
-import SplitPaymentControls from './SplitPaymentControls';
-import api from '../../lib/api';
 
 /**
  * Form fields for payment entry/editing
@@ -15,7 +11,6 @@ import api from '../../lib/api';
 const PaymentFormFields = ({
   formValues,
   handleInputChange,
-  handleSplitToggle,
   periodOptions,
   isDisabled,
   isPeriodsLoading,
@@ -28,17 +23,22 @@ const PaymentFormFields = ({
     value: period.value
   })) || [];
 
-  // Use API for expected fee calculation instead of local logic
-  const { data: feeCalculation } = useQuery(
-    ['expected-fee', contract?.contract_id, formValues.total_assets],
-    () => api.calculateFee(contract.contract_id, parseFloat(formValues.total_assets)),
-    {
-      enabled: !!contract?.contract_id && !!formValues.total_assets && !isNaN(parseFloat(formValues.total_assets)),
-      staleTime: 1000 * 60 * 5, // 5 minutes
+  // Calculate expected fee based on contract type
+  const calculateExpectedFee = () => {
+    if (!contract) return null;
+    
+    if (contract.fee_type === 'flat') {
+      return contract.flat_rate;
+    } else if (contract.fee_type === 'percentage' && formValues.total_assets) {
+      const assets = parseFloat(formValues.total_assets);
+      if (!isNaN(assets) && contract.percent_rate) {
+        return assets * contract.percent_rate;
+      }
     }
-  );
+    return null;
+  };
 
-  const expectedFee = feeCalculation?.expected_fee || null;
+  const expectedFee = calculateExpectedFee();
 
   return (
     <>
@@ -52,15 +52,15 @@ const PaymentFormFields = ({
           error={formErrors.received_date}
         />
 
-        <SplitPaymentControls
-          isSplitPayment={formValues.is_split_payment}
-          startPeriod={formValues.start_period}
-          endPeriod={formValues.end_period}
-          periodOptions={formattedPeriodOptions}
-          handleSplitToggle={handleSplitToggle}
-          handlePeriodChange={handleInputChange}
-          isDisabled={isDisabled || isPeriodsLoading}
-          errors={formErrors}
+        <Select
+          label="Applied Period"
+          options={formattedPeriodOptions}
+          value={formValues.selected_period}
+          onChange={(value) => handleInputChange('selected_period', value)}
+          placeholder={isPeriodsLoading ? "Loading periods..." : "Select period"}
+          required
+          disabled={isDisabled || isPeriodsLoading}
+          error={formErrors.selected_period}
         />
       </div>
 
@@ -118,10 +118,11 @@ const PaymentFormFields = ({
                   : (contract?.fee_type === 'percentage' ? 'Needs AUM data' : 'N/A')}
               </div>
               <div className="text-xs text-blue-500 mt-1">
-                {feeCalculation?.calculation_method || 
-                  (contract?.fee_type === 'flat' 
-                    ? 'Flat fee as specified in contract'
-                    : 'Enter AUM to calculate expected fee')}
+                {contract?.fee_type === 'flat' 
+                  ? 'Flat fee as specified in contract'
+                  : contract?.percent_rate 
+                    ? `${(contract.percent_rate * 100).toFixed(2)}% of AUM`
+                    : 'Enter AUM to calculate expected fee'}
               </div>
             </div>
           )}

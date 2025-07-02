@@ -11,6 +11,11 @@ export const usePaymentFormSubmit = (clientId, contract, editingPayment, resetFo
       return;
     }
 
+    // Parse selected period
+    const periodParts = formValues.selected_period.split('-');
+    const period = parseInt(periodParts[0], 10);
+    const year = parseInt(periodParts[1], 10);
+
     // Prepare payment data from form values
     const paymentData = {
       contract_id: contract.contract_id,
@@ -20,41 +25,10 @@ export const usePaymentFormSubmit = (clientId, contract, editingPayment, resetFo
       actual_fee: parseFloat(formValues.actual_fee),
       method: formValues.method || null,
       notes: formValues.notes || null,
+      applied_period_type: contract.payment_schedule,
+      applied_period: period,
+      applied_year: year
     };
-
-    // Parse period values
-    const isMonthly = contract.payment_schedule === 'monthly';
-    const startPeriodParts = formValues.start_period.split('-');
-
-    if (isMonthly) {
-      // Set monthly fields
-      paymentData.applied_start_month = parseInt(startPeriodParts[0], 10);
-      paymentData.applied_start_month_year = parseInt(startPeriodParts[1], 10);
-
-      if (formValues.is_split_payment && formValues.end_period) {
-        const endPeriodParts = formValues.end_period.split('-');
-        paymentData.applied_end_month = parseInt(endPeriodParts[0], 10);
-        paymentData.applied_end_month_year = parseInt(endPeriodParts[1], 10);
-      } else {
-        // Single month payment
-        paymentData.applied_end_month = paymentData.applied_start_month;
-        paymentData.applied_end_month_year = paymentData.applied_start_month_year;
-      }
-    } else {
-      // Set quarterly fields
-      paymentData.applied_start_quarter = parseInt(startPeriodParts[0], 10);
-      paymentData.applied_start_quarter_year = parseInt(startPeriodParts[1], 10);
-
-      if (formValues.is_split_payment && formValues.end_period) {
-        const endPeriodParts = formValues.end_period.split('-');
-        paymentData.applied_end_quarter = parseInt(endPeriodParts[0], 10);
-        paymentData.applied_end_quarter_year = parseInt(endPeriodParts[1], 10);
-      } else {
-        // Single quarter payment
-        paymentData.applied_end_quarter = paymentData.applied_start_quarter;
-        paymentData.applied_end_quarter_year = paymentData.applied_start_quarter_year;
-      }
-    }
 
     // Update or create payment
     if (editingPayment) {

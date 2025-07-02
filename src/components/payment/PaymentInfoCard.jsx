@@ -4,7 +4,7 @@ import { formatCurrency } from '../../lib/formatUtils';
 import { formatDate } from '../../lib/dateUtils';
 import { MONTH_NAMES } from '../../lib/constants';
 
-const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
+const PaymentInfoCard = ({ dashboardData, isLoading }) => {
   if (isLoading) {
     return (
       <Card variant="default" elevation="default">
@@ -25,70 +25,24 @@ const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
     );
   }
 
-  // Get latest payment data directly from payments array
-  const latestPayment = payments && payments.length > 0 ? payments[0] : null;
-
-  // Get last recorded AUM from the latest payment that has it
-  const lastRecordedAUM = payments?.find(p => p.total_assets)?.total_assets || null;
-
-  // Calculate current period based on payment schedule
-  const getCurrentPeriod = () => {
-    if (!contract) return 'N/A';
-
-    const now = new Date();
-    const currentMonth = now.getMonth(); // 0-indexed
-    const currentYear = now.getFullYear();
-
-    if (contract.payment_schedule === 'monthly') {
-      return `${MONTH_NAMES[currentMonth]} ${currentYear}`;
-    } else {
-      const currentQuarter = Math.floor(currentMonth / 3) + 1;
-      return `Q${currentQuarter} ${currentYear}`;
-    }
-  };
-
-  // Calculate expected fee based on contract and latest AUM
-  const getExpectedFee = () => {
-    if (!contract) return 'N/A';
-
-    if (contract.fee_type === 'flat' && contract.flat_rate !== null) {
-      return formatCurrency(contract.flat_rate);
-    }
-
-    if ((contract.fee_type === 'percentage' || contract.fee_type === 'percent') &&
-      contract.percent_rate !== null) {
-      if (lastRecordedAUM !== null) {
-        const fee = lastRecordedAUM * contract.percent_rate;
-        return formatCurrency(fee);
-      }
-      return 'Needs AUM data';
-    }
-
-    return 'N/A';
-  };
-
-  // Determine if payment status is due for current period
-  const isCurrentPeriodPaid = () => {
-    if (!latestPayment || !contract) return false;
-
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1; // Convert to 1-indexed
-    const currentYear = now.getFullYear();
-    const currentQuarter = Math.floor((now.getMonth()) / 3) + 1;
-
-    if (contract.payment_schedule === 'monthly') {
-      return latestPayment.applied_end_month === currentMonth &&
-        latestPayment.applied_end_month_year === currentYear;
-    } else {
-      return latestPayment.applied_end_quarter === currentQuarter &&
-        latestPayment.applied_end_quarter_year === currentYear;
-    }
-  };
+  // Extract data from dashboard response
+  const metrics = dashboardData?.metrics || {};
+  const paymentStatus = dashboardData?.payment_status || {};
+  const payments = dashboardData?.recent_payments || [];
+  
+  // Get latest payment data
+  const latestPayment = payments.length > 0 ? payments[0] : null;
+  
+  // Use metrics from dashboard API
+  const lastRecordedAUM = metrics.last_recorded_assets;
+  const currentPeriod = paymentStatus.current_period || 'N/A';
+  const expectedFee = paymentStatus.expected_fee;
+  const isPaid = paymentStatus.status === 'Paid';
 
   const details = [
     {
       label: 'AUM',
-      value: lastRecordedAUM !== null ? formatCurrency(lastRecordedAUM) : 'No AUM data',
+      value: lastRecordedAUM ? formatCurrency(lastRecordedAUM) : 'No AUM data',
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
           <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
@@ -97,7 +51,7 @@ const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
     },
     {
       label: 'Expected Fee',
-      value: getExpectedFee(),
+      value: expectedFee ? formatCurrency(expectedFee) : 'N/A',
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
           <circle cx="12" cy="12" r="10"></circle>
@@ -108,7 +62,7 @@ const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
     },
     {
       label: 'Last Payment',
-      value: latestPayment ? formatDate(latestPayment.received_date) : 'No payments recorded',
+      value: paymentStatus.last_payment_date ? formatDate(paymentStatus.last_payment_date) : 'No payments recorded',
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -120,7 +74,7 @@ const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
     },
     {
       label: 'Last Payment Amount',
-      value: latestPayment ? formatCurrency(latestPayment.actual_fee) : 'N/A',
+      value: paymentStatus.last_payment_amount ? formatCurrency(paymentStatus.last_payment_amount) : 'N/A',
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
           <line x1="12" y1="1" x2="12" y2="23"></line>
@@ -130,7 +84,7 @@ const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
     },
     {
       label: 'Current Period',
-      value: getCurrentPeriod(),
+      value: currentPeriod,
       highlight: true,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-500">
@@ -143,12 +97,26 @@ const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
     },
     {
       label: 'Payment Status',
-      value: isCurrentPeriodPaid() ? 'Paid' : 'Due',
-      highlight: !isCurrentPeriodPaid(),
+      value: paymentStatus.status || 'Due',
+      highlight: !isPaid,
       icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={!isCurrentPeriodPaid() ? 'text-amber-500' : 'text-green-500'}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={!isPaid ? 'text-amber-500' : 'text-green-500'}>
           <circle cx="12" cy="12" r="10"></circle>
           <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      )
+    },
+    {
+      label: 'YTD Payments',
+      value: metrics.total_ytd_payments ? formatCurrency(metrics.total_ytd_payments) : 'N/A',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+          <line x1="3" y1="18" x2="3.01" y2="18"></line>
         </svg>
       )
     },

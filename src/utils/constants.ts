@@ -15,11 +15,9 @@ export const PAYMENT_METHODS = [
 export const STATUS_COLORS = {
   green: 'bg-green-100 text-green-800',
   yellow: 'bg-yellow-100 text-yellow-800',
-  red: 'bg-red-100 text-red-800',
   exact: 'bg-blue-100 text-blue-800',
   acceptable: 'bg-green-100 text-green-800',
   warning: 'bg-yellow-100 text-yellow-800',
-  alert: 'bg-red-100 text-red-800',
   unknown: 'bg-gray-100 text-gray-800',
   gray: 'bg-gray-100 text-gray-800',
 };
@@ -34,6 +32,5 @@ export const PAYMENT_SCHEDULES = {
 };
 export const PAYMENT_STATUS = {
   PAID: 'Paid',
-  DUE: 'Due',
-  OVERDUE: 'Overdue'
+  DUE: 'Due'
 };

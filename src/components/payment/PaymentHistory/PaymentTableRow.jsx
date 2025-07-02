@@ -5,9 +5,7 @@ import StatusBadge from '../../ui/StatusBadge';
 
 const PaymentTableRow = ({ 
   payment, 
-  isExpanded,
   showDeleteConfirm,
-  onToggleExpand,
   onEdit,
   onViewFile,
   onConfirmDelete,
@@ -20,41 +18,11 @@ const PaymentTableRow = ({
 
   return (
     <tr className="hover:bg-light-200" data-payment-id={payment.payment_id}>
-      <td className="py-2 px-1">
-        {payment.is_split_payment && (
-          <button
-            className="w-6 h-6 flex items-center justify-center text-dark-400 hover:text-primary-600 transition-colors"
-            onClick={() => onToggleExpand(payment.payment_id)}
-            aria-label="Toggle payment details"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-            >
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </button>
-        )}
-      </td>
+      <td className="py-2 px-1"></td>
       <td className="py-2 px-2 whitespace-nowrap">{formatDate(payment.received_date)}</td>
       <td className="py-2 px-2 truncate">{payment.provider_name || 'N/A'}</td>
       <td className="py-2 px-2 whitespace-nowrap">
-        {payment.is_split_payment ? (
-          <div className="flex items-center">
-            <span className="px-2 py-1 text-xs rounded bg-light-300 text-dark-600">Split</span>
-            <span className="ml-2 text-dark-500">
-              {payment.periods?.length || 0}
-            </span>
-          </div>
-        ) : formatAppliedPeriod(payment)}
+        {formatAppliedPeriod(payment)}
       </td>
       <td className="py-2 px-2 whitespace-nowrap">
         {payment.total_assets ? formatCurrency(payment.total_assets) : 'N/A'}

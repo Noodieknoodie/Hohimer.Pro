@@ -3,42 +3,27 @@ import ContractCard from './ContractCard';
 import PaymentInfoCard from './PaymentInfoCard';
 import ComplianceCard from './ComplianceCard';
 import ErrorDisplay from '../ui/ErrorDisplay';
-import { useClient, useClientContract, useClientDashboard } from '../../hooks/useClientData';
-import { usePaymentHistory } from '../../hooks/usePaymentData';
+import { useClientDashboard } from '../../hooks/useClientData';
 import useStore from '../../store';
 
 const ClientDashboard = ({ clientId }) => {
   const { documentViewerOpen } = useStore();
 
-  // Fetch dashboard data (replaces multiple API calls)
+  // Fetch dashboard data - single endpoint for all dashboard needs
   const {
     data: dashboardData,
     isLoading: isDashboardLoading,
     error: dashboardError,
   } = useClientDashboard(clientId);
 
-  // Keep individual hooks for components that still need them
-  const {
-    data: client,
-    isLoading: isClientLoading,
-    error: clientError,
-  } = useClient(clientId);
+  // Extract data from dashboard response
+  const client = dashboardData?.client;
+  const contract = dashboardData?.contract;
+  const payments = dashboardData?.recent_payments || [];
+  const metrics = dashboardData?.metrics;
 
-  const {
-    data: contract,
-    isLoading: isContractLoading,
-    error: contractError,
-  } = useClientContract(clientId);
-
-  // Fetch latest payments for metrics calculation
-  const {
-    data: payments = [],
-    isLoading: isPaymentsLoading,
-    error: paymentsError,
-  } = usePaymentHistory(clientId, { page: 1, limit: 5 });
-
-  const isLoading = isClientLoading || isContractLoading || isPaymentsLoading || isDashboardLoading;
-  const error = clientError || contractError || paymentsError || dashboardError;
+  const isLoading = isDashboardLoading;
+  const error = dashboardError;
 
   if (error) {
     return (
@@ -62,14 +47,12 @@ const ClientDashboard = ({ clientId }) => {
           isLoading={isLoading}
         />
         <PaymentInfoCard
-          client={client}
-          contract={contract}
-          payments={payments}
+          dashboardData={dashboardData}
           isLoading={isLoading}
         />
         <ComplianceCard
           dashboardData={dashboardData}
-          isLoading={isDashboardLoading}
+          isLoading={isLoading}
         />
       </div>
     </div>

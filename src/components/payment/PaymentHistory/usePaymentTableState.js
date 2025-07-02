@@ -3,12 +3,7 @@ import { useState } from 'react';
 export const usePaymentTableState = () => {
   const [page, setPage] = useState(1);
   const [year, setYear] = useState(null);
-  const [expandedPaymentId, setExpandedPaymentId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-
-  const toggleExpandRow = (paymentId) => {
-    setExpandedPaymentId(expandedPaymentId === paymentId ? null : paymentId);
-  };
 
   const confirmDelete = (paymentId) => {
     setShowDeleteConfirm(paymentId);
@@ -32,7 +27,6 @@ export const usePaymentTableState = () => {
     // State
     page,
     year,
-    expandedPaymentId,
     showDeleteConfirm,
     
     // Setters
@@ -40,7 +34,6 @@ export const usePaymentTableState = () => {
     setYear,
     
     // Actions
-    toggleExpandRow,
     confirmDelete,
     cancelDelete,
     

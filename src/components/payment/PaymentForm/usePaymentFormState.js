@@ -8,9 +8,7 @@ export const usePaymentFormState = (clientId, contract, periodsData, editingPaym
     actual_fee: '',
     method: '',
     notes: '',
-    is_split_payment: false,
-    start_period: '',
-    end_period: '',
+    selected_period: '',
   };
 
   const [formValues, setFormValues] = useState(defaultFormValues);
@@ -55,12 +53,12 @@ export const usePaymentFormState = (clientId, contract, periodsData, editingPaym
 
   // Set default period when periods data is loaded
   useEffect(() => {
-    if (periodsData?.periods?.length && !formValues.start_period && !editingPayment) {
+    if (periodsData?.periods?.length && !formValues.selected_period && !editingPayment) {
       const defaultPeriod = findDefaultPeriod();
       if (defaultPeriod) {
         setFormValues(prev => ({
           ...prev,
-          start_period: defaultPeriod
+          selected_period: defaultPeriod
         }));
       }
     }
@@ -69,23 +67,13 @@ export const usePaymentFormState = (clientId, contract, periodsData, editingPaym
   // Populate form when editing a payment
   useEffect(() => {
     if (editingPayment) {
-      const isMonthlyPayment = editingPayment.applied_start_month !== null;
-
       const formattedValues = {
         received_date: editingPayment.received_date,
         total_assets: editingPayment.total_assets?.toString() || '',
         actual_fee: editingPayment.actual_fee?.toString() || '',
         method: editingPayment.method || '',
         notes: editingPayment.notes || '',
-        is_split_payment: editingPayment.is_split_payment || false,
-        start_period: isMonthlyPayment
-          ? `${editingPayment.applied_start_month}-${editingPayment.applied_start_month_year}`
-          : `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`,
-        end_period: editingPayment.is_split_payment
-          ? (isMonthlyPayment
-            ? `${editingPayment.applied_end_month}-${editingPayment.applied_end_month_year}`
-            : `${editingPayment.applied_end_quarter}-${editingPayment.applied_end_quarter_year}`)
-          : '',
+        selected_period: `${editingPayment.applied_period}-${editingPayment.applied_year}`,
       };
 
       setFormValues(formattedValues);
@@ -113,21 +101,12 @@ export const usePaymentFormState = (clientId, contract, periodsData, editingPaym
     }));
   };
 
-  const handleSplitToggle = () => {
-    setFormValues(prev => ({
-      ...prev,
-      is_split_payment: !prev.is_split_payment,
-      end_period: !prev.is_split_payment ? prev.start_period : ''
-    }));
-  };
-
   return {
     formValues,
     setFormValues,
     initialFormState,
     setInitialFormState,
     resetForm,
-    handleInputChange,
-    handleSplitToggle
+    handleInputChange
   };
 };

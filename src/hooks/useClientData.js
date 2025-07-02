@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import api from '../lib/api';
+import api from '../services/api';
 import { queryKeys } from '../store/queries';
 /**
  * Hook to fetch all clients
