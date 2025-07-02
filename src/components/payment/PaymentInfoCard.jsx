@@ -1,8 +1,8 @@
 import React from 'react';
 import Card from '../ui/Card';
-import { formatCurrency } from '../../lib/formatUtils';
-import { formatDate } from '../../lib/dateUtils';
-import { MONTH_NAMES } from '../../lib/constants';
+import { formatCurrency } from '../../utils/formatters';
+import { formatDate } from '../../utils/dateUtils';
+import { MONTH_NAMES } from '../../utils/constants';
 
 const PaymentInfoCard = ({ dashboardData, isLoading }) => {
   if (isLoading) {

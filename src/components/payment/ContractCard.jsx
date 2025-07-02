@@ -1,6 +1,6 @@
 import React from 'react';
 import Card from '../ui/Card';
-import { formatCurrency } from '../../lib/formatUtils';
+import { formatCurrency } from '../../utils/formatters';
 
 const ContractCard = ({ contract, isLoading }) => {
   if (isLoading) {

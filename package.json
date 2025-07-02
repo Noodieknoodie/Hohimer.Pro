@@ -16,10 +16,12 @@
         "mssql": "^11.0.1",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
-        "send": "^0.18.0"
+        "send": "^0.18.0",
+        "zustand": "^5.0.6"
     },
     "devDependencies": {
         "@microsoft/teams-js": "^2.31.1",
+        "@tailwindcss/cli": "^4.1.11",
         "@tailwindcss/postcss": "^4.1.11",
         "@types/express": "^5.0.0",
         "@types/jest": "^29.5.0",
@@ -40,12 +42,13 @@
         "vite": "^6.0.2"
     },
     "scripts": {
+        "build:frontend": "vite build",
+        "build:backend": "tsc --build && shx cp -r ./src/views ./src/static ./lib/",
+        "build": "npm run build:frontend && npm run build:backend",
+        "dev": "env-cmd --silent -f .localConfigs npm run start",
         "dev:teamsfx": "env-cmd --silent -f .localConfigs npm run start",
         "start": "nodemon",
         "prestart": "npm run build:frontend",
-        "build": "npm run build:frontend && npm run build:backend",
-        "build:frontend": "vite build",
-        "build:backend": "tsc --build && shx cp -r ./src/views ./src/static ./lib/",
         "test": "jest",
         "test:watch": "jest --watch"
     },

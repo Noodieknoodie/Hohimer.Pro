@@ -218,3 +218,5 @@ The tests prove the core API is working - creating payments, retrieving aggregat
 
 
 
+
+FRONTEND DONE AND MIGRATED LETS TEST! 

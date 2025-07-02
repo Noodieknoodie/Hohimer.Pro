@@ -6,7 +6,8 @@
       "Bash(grep:*)",
       "Bash(mkdir:*)",
       "Bash(npm test:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

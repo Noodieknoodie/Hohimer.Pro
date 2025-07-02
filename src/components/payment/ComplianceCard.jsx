@@ -1,6 +1,6 @@
 import React from 'react';
 import Card from '../ui/Card';
-import { formatCurrency, generateFeeReferences } from '../../lib/formatUtils';
+import { formatCurrency, generateFeeReferences } from '../../utils/formatters';
 
 const ComplianceCard = ({ dashboardData, isLoading }) => {
   if (isLoading) {

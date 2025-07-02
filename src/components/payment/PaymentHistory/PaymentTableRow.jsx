@@ -1,6 +1,6 @@
 import React from 'react';
-import { formatDate, formatAppliedPeriod } from '../../../lib/dateUtils';
-import { formatCurrency } from '../../../lib/formatUtils';
+import { formatDate, formatAppliedPeriod } from '../../../utils/dateUtils';
+import { formatCurrency } from '../../../utils/formatters';
 import StatusBadge from '../../ui/StatusBadge';
 
 const PaymentTableRow = ({ 

@@ -1,3 +1,64 @@
+#### THIS IS THE OLD CODE BUILD ####
+
+public/
+└── build.css
+
+src/
+├── components/
+│   ├── client/
+│   │   └── ClientSearch.jsx
+│   ├── layout/
+│   │   ├── Header.jsx
+│   │   ├── PageLayout.jsx
+│   │   └── Sidebar.jsx
+│   ├── payment/
+│   │   ├── PaymentForm/
+│   │   │   ├── FormActions.jsx
+│   │   │   ├── usePaymentFormState.js
+│   │   │   ├── usePaymentFormSubmit.js
+│   │   │   └── usePaymentFormValidation.js
+│   │   ├── PaymentHistory/
+│   │   │   ├── ExpandedPaymentDetails.jsx
+│   │   │   ├── PaymentTableRow.jsx
+│   │   │   └── usePaymentTableState.js
+│   │   ├── ClientDashboard.jsx
+│   │   ├── ComplianceCard.jsx
+│   │   ├── ContractCard.jsx
+│   │   ├── PaymentForm.jsx
+│   │   ├── PaymentFormFields.jsx
+│   │   ├── PaymentHistory.jsx
+│   │   ├── PaymentInfoCard.jsx
+│   │   └── SplitPaymentControls.jsx
+│   ├── hooks/
+│   │   ├── useClientData.js
+│   │   ├── useFileData.js
+│   │   └── usePaymentData.js
+│   ├── layouts/
+│   │   └── MainLayout.jsx
+│   ├── pages/
+│   │   ├── _app.js
+│   │   ├── _document.js
+│   │   ├── contacts.js
+│   │   ├── contracts.js
+│   │   ├── export.js
+│   │   ├── index.js
+│   │   ├── payments.js
+│   │   ├── summary.js
+│   │   └── under-construction.js
+│   └── styles/
+│       ├── globals.css
+│       └── index.css
+
+next.config.js
+package-lock.json
+package.json
+postcss.config.js
+tailwind.config.js
+
+
+=======
+
+
 <files>
 next.config.js
 ```js
@@ -30,6 +91,38 @@ const nextConfig = {
   },
 };
 module.exports = nextConfig;
+```
+
+package.json
+```json
+{
+    "name": "401k-payment-tracker-frontend",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev --port 6069",
+        "build": "next build",
+        "start": "next start",
+        "lint": "next lint"
+    },
+    "dependencies": {
+        "next": "13.5.4",
+        "react": "18.2.0",
+        "react-dom": "18.2.0",
+        "@tanstack/react-query": "^4.35.3",
+        "@tanstack/react-query-devtools": "^4.35.3",
+        "date-fns": "^2.30.0",
+        "react-pdf": "^7.3.3",
+        "zustand": "^4.4.1"
+    },
+    "devDependencies": {
+        "autoprefixer": "^10.4.16",
+        "postcss": "^8.4.31",
+        "tailwindcss": "^3.3.3",
+        "eslint": "8.51.0",
+        "eslint-config-next": "13.5.4"
+    }
+  }
 ```
 
 postcss.config.js
@@ -1494,319 +1587,6 @@ const ClientSearch = ({ clients = [], isLoading = false }) => {
   );
 };
 export default ClientSearch;
-```
-
-src\components\document\DocumentViewer.jsx
-```jsx
-import React, { useState, useEffect } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
-import useStore from '../../store';
-import { usePaymentFiles } from '../../hooks/useFileData';
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-const DocumentViewer = () => {
-  const { 
-    documentViewerOpen, 
-    setDocumentViewerOpen, 
-    selectedDocumentUrl 
-  } = useStore();
-  const [selectedFileId, setSelectedFileId] = useState(null);
-  const [numPages, setNumPages] = useState(null);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [pdfError, setPdfError] = useState(false);
-  const [scale, setScale] = useState(1.0);
-  const paymentIdMatch = selectedDocumentUrl?.match(/\/payment\/(\d+)/);
-  const paymentId = paymentIdMatch ? parseInt(paymentIdMatch[1]) : null;
-  const { 
-    data: files = [], 
-    isLoading,
-    isError
-  } = usePaymentFiles(paymentId, { 
-    enabled: !!paymentId && documentViewerOpen 
-  });
-  useEffect(() => {
-    if (files.length > 0 && !selectedFileId) {
-      setSelectedFileId(files[0].file_id);
-      setNumPages(null);
-      setPageNumber(1);
-      setPdfError(false);
-    }
-  }, [files, selectedFileId]);
-  useEffect(() => {
-    if (!documentViewerOpen) {
-      setSelectedFileId(null);
-      setNumPages(null);
-      setPageNumber(1);
-      setPdfError(false);
-    }
-  }, [documentViewerOpen]);
-  if (!documentViewerOpen) {
-    return null;
-  }
-  const selectedFile = files.find(file => file.file_id === selectedFileId);
-  const onDocumentLoadSuccess = ({ numPages }) => {
-    setNumPages(numPages);
-    setPdfError(false);
-  };
-  const onDocumentLoadError = (error) => {
-    console.error('Error while loading PDF:', error);
-    setPdfError(true);
-  };
-  const goToPrevPage = () => {
-    if (pageNumber > 1) {
-      setPageNumber(pageNumber - 1);
-    }
-  };
-  const goToNextPage = () => {
-    if (pageNumber < numPages) {
-      setPageNumber(pageNumber + 1);
-    }
-  };
-  const zoomIn = () => {
-    setScale(prev => Math.min(prev + 0.2, 2.5));
-  };
-  const zoomOut = () => {
-    setScale(prev => Math.max(prev - 0.2, 0.6));
-  };
-  const resetZoom = () => {
-    setScale(1.0);
-  };
-  return (
-    <div className="w-2/5 border-l border-gray-200 bg-white flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="text-lg font-medium text-gray-800">Document Preview</h2>
-        <div className="flex items-center space-x-2">
-          <button 
-            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100"
-            title="Close"
-            onClick={() => setDocumentViewerOpen(false)}
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              width="16" 
-              height="16" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div className="flex-grow flex flex-col overflow-hidden">
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-          </div>
-        ) : isError ? (
-          <div className="flex-1 flex items-center justify-center p-4 bg-red-50 text-red-700">
-            Error loading document. Please try again.
-          </div>
-        ) : files.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center p-4 bg-gray-50 text-gray-500">
-            No documents available for this payment.
-          </div>
-        ) : (
-          <>
-            {/* File selector */}
-            {files.length > 1 && (
-              <div className="flex p-2 border-b border-gray-200 overflow-x-auto">
-                {files.map(file => (
-                  <button
-                    key={file.file_id}
-                    className={`px-3 py-1.5 text-sm rounded-md mr-2 whitespace-nowrap ${
-                      selectedFileId === file.file_id 
-                        ? 'bg-primary-100 text-primary-700 border border-primary-300' 
-                        : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
-                    }`}
-                    onClick={() => {
-                      setSelectedFileId(file.file_id);
-                      setPageNumber(1);
-                      setNumPages(null);
-                      setPdfError(false);
-                      setScale(1.0);
-                    }}
-                  >
-                    {file.file_name}
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* Document display area */}
-            <div className="flex-1 p-4 overflow-hidden flex flex-col">
-              {selectedFile ? (
-                <div className="h-full flex flex-col">
-                  <div className="bg-gray-50 p-2 rounded-md mb-2 text-sm text-gray-700">
-                    <div className="font-medium">{selectedFile.file_name}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Path: {selectedFile.full_path || selectedFile.onedrive_path}
-                    </div>
-                  </div>
-                  {/* PDF Viewer */}
-                  <div className="flex-1 flex flex-col items-center bg-gray-100 rounded-md overflow-hidden">
-                    {pdfError ? (
-                      <div className="h-full flex items-center justify-center text-center p-4">
-                        <div>
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="64" 
-                            height="64" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round" 
-                            className="mx-auto mb-4 text-red-400"
-                          >
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                          </svg>
-                          <p className="text-red-600 font-medium mb-2">Error loading PDF</p>
-                          <p className="text-sm text-gray-500 mb-4">
-                            Unable to load the PDF file. Please make sure the file exists and is accessible.
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            File path: {selectedFile.full_path || selectedFile.onedrive_path}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Zoom controls */}
-                        <div className="w-full flex justify-center p-2 bg-gray-50 border-b border-gray-200">
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={zoomOut}
-                              disabled={scale <= 0.6}
-                              className={`p-1 rounded ${scale <= 0.6 ? 'text-gray-300' : 'text-gray-700 hover:bg-gray-200'}`}
-                              title="Zoom out"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                <line x1="8" y1="11" x2="14" y2="11"></line>
-                              </svg>
-                            </button>
-                            <button
-                              onClick={resetZoom}
-                              className="px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300 text-gray-700"
-                              title="Reset zoom"
-                            >
-                              {Math.round(scale * 100)}%
-                            </button>
-                            <button
-                              onClick={zoomIn}
-                              disabled={scale >= 2.5}
-                              className={`p-1 rounded ${scale >= 2.5 ? 'text-gray-300' : 'text-gray-700 hover:bg-gray-200'}`}
-                              title="Zoom in"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                <line x1="11" y1="8" x2="11" y2="14"></line>
-                                <line x1="8" y1="11" x2="14" y2="11"></line>
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex-1 w-full overflow-auto flex justify-center p-4">
-                          <Document
-                            file={selectedFile.full_path}
-                            onLoadSuccess={onDocumentLoadSuccess}
-                            onLoadError={onDocumentLoadError}
-                            loading={
-                              <div className="flex items-center justify-center h-full">
-                                <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-                              </div>
-                            }
-                          >
-                            <Page 
-                              pageNumber={pageNumber} 
-                              scale={scale}
-                              renderTextLayer={false}
-                              renderAnnotationLayer={false}
-                            />
-                          </Document>
-                        </div>
-                        {/* Page navigation for multi-page PDFs */}
-                        {numPages > 1 && (
-                          <div className="p-3 bg-white border-t border-gray-200 flex items-center justify-between">
-                            <button
-                              onClick={goToPrevPage}
-                              disabled={pageNumber <= 1}
-                              className={`p-2 rounded-md ${
-                                pageNumber <= 1
-                                  ? 'text-gray-300 cursor-not-allowed'
-                                  : 'text-gray-600 hover:bg-gray-100'
-                              }`}
-                            >
-                              <svg 
-                                xmlns="http://www.w3.org/2000/svg" 
-                                width="20" 
-                                height="20" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="2" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="15 18 9 12 15 6"></polyline>
-                              </svg>
-                            </button>
-                            <span className="text-sm text-gray-600">
-                              Page {pageNumber} of {numPages}
-                            </span>
-                            <button
-                              onClick={goToNextPage}
-                              disabled={pageNumber >= numPages}
-                              className={`p-2 rounded-md ${
-                                pageNumber >= numPages
-                                  ? 'text-gray-300 cursor-not-allowed'
-                                  : 'text-gray-600 hover:bg-gray-100'
-                              }`}
-                            >
-                              <svg 
-                                xmlns="http://www.w3.org/2000/svg" 
-                                width="20" 
-                                height="20" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="2" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center bg-gray-100 rounded-md">
-                  <div className="text-center text-gray-500">
-                    No file selected
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
-export default DocumentViewer;
 ```
 
 src\components\layout\Header.jsx
@@ -3638,483 +3418,6 @@ const SplitPaymentControls = ({
 export default SplitPaymentControls;
 ```
 
-src\components\ui\Button.jsx
-```jsx
-import React from 'react';
-const Button = ({ 
-  children, 
-  variant = 'primary', 
-  size = 'md',
-  className = '',
-  iconLeft = null,
-  iconRight = null,
-  ...props 
-}) => {
-  const variantStyles = {
-    primary: 'bg-primary-600 text-white hover:bg-primary-700 hover:shadow-sm shadow-sm',
-    secondary: 'bg-white border border-light-500 text-dark-500 hover:bg-light-200 hover:border-light-500 hover:text-dark-600 shadow-sm',
-    outline: 'bg-transparent border border-primary-600 text-primary-600 hover:bg-primary-50 hover:border-primary-700 hover:text-primary-700 shadow-sm',
-    dark: 'bg-dark-600 text-white hover:bg-dark-700 hover:shadow-sm shadow-sm',
-    ghost: 'text-dark-500 hover:bg-light-300 hover:text-dark-600',
-    danger: 'bg-status-error text-white hover:bg-red-700 hover:shadow-sm shadow-sm',
-  };
-  const sizeStyles = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2',
-    lg: 'px-6 py-3 text-base',
-  };
-  return (
-    <button
-      className={`
-        ${variantStyles[variant]} 
-        ${sizeStyles[size]} 
-        flex items-center justify-center gap-2
-        rounded-md font-medium 
-        transition-all duration-200 ease-in-out
-        focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500
-        ${className}
-      `}
-      {...props}
-    >
-      {iconLeft && <span className="flex-shrink-0">{iconLeft}</span>}
-      <span>{children}</span>
-      {iconRight && <span className="flex-shrink-0">{iconRight}</span>}
-    </button>
-  );
-};
-export default Button;
-```
-
-src\components\ui\Card.jsx
-```jsx
-import React from 'react';
-const Card = ({ 
-  children, 
-  title,
-  className = '',
-  titleClassName = '',
-  bodyClassName = '',
-  variant = 'default',
-  size = 'default',
-  elevation = 'default',
-  ...props 
-}) => {
-  const elevationClasses = {
-    none: '',
-    default: 'shadow-sm',
-    raised: 'shadow-md',
-    floating: 'shadow-lg',
-  };
-  const variantClasses = {
-    default: 'bg-white border border-light-300',
-    outlined: 'bg-white border border-light-300',
-    filled: 'bg-light-100 border border-light-200',
-  };
-  const hasPaddingClass = /\bp-\d+\b/.test(className);
-  const paddingClass = hasPaddingClass ? '' : 'p-3';
-  const baseClasses = 'rounded-lg';
-  const elevationClass = elevationClasses[elevation] || elevationClasses.default;
-  const variantClass = variantClasses[variant] || variantClasses.default;
-  return (
-    <div 
-      className={`${baseClasses} ${elevationClass} ${variantClass} ${paddingClass} ${className}`}
-      {...props}
-    >
-      {title && (
-        <div className={`px-5 py-4 border-b border-light-400 font-medium ${titleClassName}`}>
-          <h3 className="text-lg">{title}</h3>
-        </div>
-      )}
-      <div className={`${size} ${bodyClassName}`}>
-        {children}
-      </div>
-    </div>
-  );
-};
-export default Card;
-```
-
-src\components\ui\ConfirmDialog.jsx
-```jsx
-import React from 'react';
-import Card from './Card';
-import Button from './Button';
-const ConfirmDialog = ({ 
-  isOpen = true,
-  title = "Confirm Action", 
-  message = "Are you sure you want to proceed?", 
-  confirmText = "Confirm",
-  cancelText = "Cancel",
-  confirmVariant = "danger",
-  onConfirm, 
-  onCancel,
-  isLoading = false
-}) => {
-  if (!isOpen) {
-    return null;
-  }
-  return (
-    <div className="fixed inset-0 bg-dark-800 bg-opacity-75 flex items-center justify-center z-50">
-      <Card className="max-w-md w-full" elevation="default">
-        <div className="p-4">
-          <h3 className="text-lg font-medium mb-2 text-dark-700">{title}</h3>
-          <p className="mb-3 text-dark-500">{message}</p>
-          <div className="flex justify-end space-x-3">
-            <Button
-              variant="secondary"
-              onClick={onCancel}
-              disabled={isLoading}
-            >
-              {cancelText}
-            </Button>
-            <Button
-              variant={confirmVariant}
-              onClick={onConfirm}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Processing...' : confirmText}
-            </Button>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-};
-export default ConfirmDialog;
-```
-
-src\components\ui\DatePicker.jsx
-```jsx
-import React from 'react';
-const DatePicker = ({
-  label,
-  value,
-  onChange,
-  placeholder = '',
-  disabled = false,
-  required = false,
-  error = null,
-}) => {
-  return (
-    <div className="space-y-1.5">
-      {label && (
-        <label className="text-sm font-medium flex items-center">
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </label>
-      )}
-      <div className="relative">
-        <input
-          type="date"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={`
-            w-full h-10 pl-8 pr-3 border rounded-md
-            ${error ? 'border-red-500' : 'border-gray-200'}
-            ${disabled ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}
-            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-          `}
-        />
-        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-gray-400"
-          >
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
-        </div>
-      </div>
-      {error && <p className="text-red-500 text-xs">{error}</p>}
-    </div>
-  );
-};
-export default DatePicker;
-```
-
-src\components\ui\EmptyState.jsx
-```jsx
-import React from 'react';
-const EmptyState = ({ 
-  title, 
-  message, 
-  icon = null,
-  className = '',
-  bgColor = 'bg-gray-50',
-  textColor = 'text-gray-500'
-}) => (
-  <div className={`flex-1 flex items-center justify-center p-4 ${bgColor} ${textColor} ${className}`}>
-    <div className="text-center">
-      {icon}
-      <p className="font-medium mb-1">{title}</p>
-      {message && <p className="text-sm">{message}</p>}
-    </div>
-  </div>
-);
-export default EmptyState;
-```
-
-src\components\ui\ErrorDisplay.jsx
-```jsx
-import React from 'react';
-const ErrorDisplay = ({ title, message, error }) => (
-  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-    <h3 className="font-medium mb-1">{title}</h3>
-    <p>{error?.message || message}</p>
-  </div>
-);
-export default ErrorDisplay;
-```
-
-src\components\ui\Input.jsx
-```jsx
-import React from 'react';
-const Input = ({
-  label,
-  type = 'text',
-  value,
-  onChange,
-  placeholder = '',
-  prefix = null,
-  disabled = false,
-  className = '',
-  required = false,
-  error = null,
-}) => {
-  return (
-    <div className="space-y-1.5">
-      {label && (
-        <label className="text-sm font-medium flex items-center text-dark-600">
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </label>
-      )}
-      <div className="relative group">
-        {prefix && (
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 group-hover:text-primary-500 transition-colors duration-200">
-            {prefix}
-          </div>
-        )}
-        <input
-          type={type}
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={`
-            w-full h-10 rounded-md border shadow-sm
-            ${error ? 'border-red-500' : 'border-gray-200 group-hover:border-primary-300'}
-            ${prefix ? 'pl-8' : 'pl-3'}
-            ${disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-900'}
-            focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent
-            transition-all duration-200 ease-in-out
-            ${className}
-          `}
-        />
-        {!error && !disabled && (
-          <div className="absolute inset-0 border border-transparent rounded-md pointer-events-none group-hover:border-primary-200 group-hover:shadow-sm transition-all duration-200"></div>
-        )}
-      </div>
-      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-    </div>
-  );
-};
-export default Input;
-```
-
-src\components\ui\Loader.jsx
-```jsx
-import React from 'react';
-const Loader = ({ size = 'md', color = 'blue' }) => {
-  const sizeClasses = {
-    sm: 'h-4 w-4',
-    md: 'h-6 w-6',
-    lg: 'h-8 w-8',
-    xl: 'h-12 w-12',
-  };
-  const colorClasses = {
-    blue: 'text-blue-600',
-    gray: 'text-gray-600',
-    white: 'text-white',
-  };
-  return (
-    <svg
-      className={`animate-spin ${sizeClasses[size]} ${colorClasses[color]}`}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      ></circle>
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      ></path>
-    </svg>
-  );
-};
-export default Loader;
-```
-
-src\components\ui\LoadingSpinner.jsx
-```jsx
-import React from 'react';
-const LoadingSpinner = ({ size = 'default', className = '' }) => {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    default: 'w-10 h-10',
-    lg: 'w-16 h-16'
-  };
-  return (
-    <div className={`border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin ${sizeClasses[size]} ${className}`} />
-  );
-};
-export default LoadingSpinner;
-```
-
-src\components\ui\Select.jsx
-```jsx
-import React from 'react';
-/**
- * Select component with consistent styling
- */
-const Select = ({
-  label,
-  options = [],
-  value,
-  onChange,
-  placeholder = 'Select an option',
-  disabled = false,
-  required = false,
-  error = null,
-  className = '',
-  size = 'default',
-}) => {
-  const sizeStyles = {
-    sm: 'h-8 px-2 text-sm',
-    default: 'h-10 px-3 text-sm',
-    lg: 'h-12 px-4 text-base',
-  };
-  return (
-    <div className={`space-y-1.5 w-full ${className}`}>
-      {label && (
-        <label className="text-sm font-medium text-dark-600 flex items-center">
-          {label}
-          {required && <span className="text-status-error ml-1">*</span>}
-        </label>
-      )}
-      <div className="relative w-full group">
-        <select
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          className={`
-            w-full rounded-md appearance-none shadow-sm
-            ${sizeStyles[size] || sizeStyles.default}
-            transition-all duration-200 ease-in-out
-            ${error ? 'border-status-error' : 'border-light-400 group-hover:border-light-500'}
-            ${disabled ? 'bg-light-300 text-dark-400 cursor-not-allowed' : 'bg-light-100 text-dark-600'}
-            focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-transparent
-          `}
-        >
-          <option value="" disabled>
-            {placeholder}
-          </option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-dark-400 group-hover:text-dark-500 transition-colors duration-200"
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </div>
-        {!error && !disabled && (
-          <div className="absolute inset-0 border border-transparent rounded-md pointer-events-none group-hover:border-light-400 transition-all duration-200"></div>
-        )}
-      </div>
-      {error && (
-        <p className="text-status-error text-xs mt-1 animate-fade-in">{error}</p>
-      )}
-    </div>
-  );
-};
-export default Select;
-```
-
-src\components\ui\StatusBadge.jsx
-```jsx
-import React from 'react';
-import { STATUS_COLORS } from '../../lib/constants';
-/**
- * Status badge component for displaying statuses with appropriate colors
- * @param {string} status - Status identifier (exact, acceptable, warning, alert, unknown)
- * @param {string} label - Text label to display
- * @param {string} size - Size variant (xs, sm, md, lg)
- */
-const StatusBadge = ({ status, label, size = 'md' }) => {
-  const sizeClasses = {
-    xs: 'px-1 py-0.5 text-xs',
-    sm: 'px-1.5 py-0.5 text-xs',
-    md: 'px-2 py-1 text-xs',
-    lg: 'px-3 py-1.5 text-sm',
-  };
-  const colorClass = STATUS_COLORS[status] || STATUS_COLORS.gray;
-  const sizeClass = sizeClasses[size] || sizeClasses.md;
-  const getDisplayLabel = () => {
-    if (!label || label === 'N/A') return 'N/A';
-    switch (status) {
-      case 'exact':
-        return '✓ Exact';
-      case 'acceptable':
-        return '✓ ' + label;
-      case 'unknown':
-        return 'N/A';
-      default:
-        return label;
-    }
-  };
-  return (
-    <span className={`inline-flex items-center font-medium rounded-full ${colorClass} ${sizeClass}`}>
-      {getDisplayLabel()}
-    </span>
-  );
-};
-export default StatusBadge;
-```
-
 src\hooks\useClientData.js
 ```js
 import { useQuery } from '@tanstack/react-query';
@@ -4527,302 +3830,6 @@ src\layouts\MainLayout.jsx
             {children}
           </main>
         </div> 
-```
-
-src\lib\api.js
-```js
-/**
- * API service for communicating with the backend
- */
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
-/**
- * Perform an API request with error handling
- * @param {string} endpoint - API endpoint
- * @param {Object} options - Request options
- * @returns {Promise<any>} - Response data
- */
-async function request(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-  const config = {
-    ...options,
-    headers,
-  };
-  try {
-    const response = await fetch(url, config);
-    if (response.status >= 400 && response.status < 500) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `API error: ${response.status} ${response.statusText}`);
-    }
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status} ${response.statusText}`);
-    }
-    if (response.status === 204) {
-      return null;
-    }
-    return await response.json();
-  } catch (error) {
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      throw new Error('Cannot connect to the server. Please check your network connection and make sure the backend is running.');
-    }
-    throw error;
-  }
-}
-/**
- * API service with all available endpoints
- */
-const api = {
-  getClients: (params) => {
-    const queryString = params ? new URLSearchParams(params).toString() : '';
-    return request(`/clients${queryString ? '?' + queryString : ''}`);
-  },
-  getClient: (id) => request(`/clients/${id}`),
-  getClientDashboard: (id) => request(`/clients/${id}/dashboard`),
-  getContract: (id) => request(`/contracts/${id}`),
-  getClientContract: (clientId) => request(`/clients/${clientId}/contract`),
-  getAvailablePeriods: (contractId, clientId) =>
-    request(`/contracts/${contractId}/periods?client_id=${clientId}`),
-  getPayments: (clientId, params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    return request(`/clients/${clientId}/payments?${queryString}`);
-  },
-  getPayment: (id) => request(`/payments/${id}`),
-  createPayment: (data) => request('/payments', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  updatePayment: (id, data) => request(`/payments/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  deletePayment: (id) => request(`/payments/${id}`, {
-    method: 'DELETE',
-  }),
-  calculateFee: (contractId, totalAssets) => request('/calculate-fee', {
-    method: 'POST',
-    body: JSON.stringify({ contract_id: contractId, total_assets: totalAssets }),
-  }),
-  calculateVariance: (actualFee, expectedFee) => request(`/calculate-variance?actual_fee=${actualFee}&expected_fee=${expectedFee}`, {
-    method: 'POST',
-  }),
-  checkPaymentFiles: (paymentId) =>
-    request(`/files/check/payment/${paymentId}`),
-  checkClientFiles: (clientId) =>
-    request(`/files/check/client/${clientId}`),
-  getPaymentFiles: (paymentId) =>
-    request(`/files/payment/${paymentId}`),
-};
-export default api;
-```
-
-src\lib\constants.js
-```js
-/**
- * Application-wide constants
- */
-export const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-];
-export const PAYMENT_METHODS = [
-  { label: 'Auto - ACH', value: 'Auto - ACH' },
-  { label: 'Auto - Check', value: 'Auto - Check' },
-  { label: 'Invoice - Check', value: 'Invoice - Check' },
-  { label: 'Wire Transfer', value: 'Wire Transfer' },
-  { label: 'Check', value: 'Check' },
-];
-export const STATUS_COLORS = {
-  green: 'bg-green-100 text-green-800',
-  yellow: 'bg-yellow-100 text-yellow-800',
-  red: 'bg-red-100 text-red-800',
-  exact: 'bg-blue-100 text-blue-800',
-  acceptable: 'bg-green-100 text-green-800',
-  warning: 'bg-yellow-100 text-yellow-800',
-  alert: 'bg-red-100 text-red-800',
-  unknown: 'bg-gray-100 text-gray-800',
-  gray: 'bg-gray-100 text-gray-800',
-};
-export const FEE_TYPES = {
-  FLAT: 'flat',
-  PERCENTAGE: 'percentage',
-  PERCENT: 'percent'
-};
-export const PAYMENT_SCHEDULES = {
-  MONTHLY: 'monthly',
-  QUARTERLY: 'quarterly'
-};
-export const PAYMENT_STATUS = {
-  PAID: 'Paid',
-  DUE: 'Due',
-  OVERDUE: 'Overdue'
-};
-```
-
-src\lib\dateUtils.js
-```js
-import { format, parseISO } from 'date-fns';
-import { MONTH_NAMES } from './constants';
-/**
- * Format a date string or Date object to a human-readable format
- * @param {string|Date} dateInput - ISO date string or Date object
- * @param {string} formatStr - Optional format string
- * @returns {string} - Formatted date string
- */
-export const formatDate = (dateInput, formatStr = 'MMM d, yyyy') => {
-  if (!dateInput) return 'N/A';
-  try {
-    const date = dateInput instanceof Date ? dateInput : parseISO(dateInput);
-    return format(date, formatStr);
-  } catch (error) {
-    return 'Invalid Date';
-  }
-};
-/**
- * Format applied period from payment data
- * @param {Object} payment - Payment object
- * @returns {string} - Formatted period string
- */
-export const formatAppliedPeriod = (payment) => {
-  if (!payment) return 'N/A';
-  if (payment.applied_start_quarter) {
-    return `Q${payment.applied_start_quarter} ${payment.applied_start_quarter_year}`;
-  }
-  if (payment.applied_start_month) {
-    const monthIndex = payment.applied_start_month - 1; 
-    if (monthIndex >= 0 && monthIndex < 12) {
-      return `${MONTH_NAMES[monthIndex]} ${payment.applied_start_month_year}`;
-    }
-  }
-  return 'N/A';
-};
-/**
- * Format period range for split payments
- * @param {Object} payment - Payment object
- * @returns {string} - Formatted period range
- */
-export const formatPeriodRange = (payment) => {
-  if (!payment || !payment.is_split_payment) return formatAppliedPeriod(payment);
-  let startPeriod, endPeriod;
-  if (payment.applied_start_quarter) {
-    startPeriod = `Q${payment.applied_start_quarter} ${payment.applied_start_quarter_year}`;
-    endPeriod = `Q${payment.applied_end_quarter} ${payment.applied_end_quarter_year}`;
-  } else if (payment.applied_start_month) {
-    const startMonthIndex = payment.applied_start_month - 1;
-    const endMonthIndex = payment.applied_end_month - 1;
-    if (startMonthIndex >= 0 && startMonthIndex < 12 &&
-      endMonthIndex >= 0 && endMonthIndex < 12) {
-      startPeriod = `${MONTH_NAMES[startMonthIndex]} ${payment.applied_start_month_year}`;
-      endPeriod = `${MONTH_NAMES[endMonthIndex]} ${payment.applied_end_month_year}`;
-    } else {
-      return 'Invalid Period';
-    }
-  } else {
-    return 'N/A';
-  }
-  return `${startPeriod} - ${endPeriod}`;
-};
-```
-
-src\lib\formatUtils.js
-```js
-/**
- * Formatting utilities for the frontend.
- * This file contains only presentation/formatting functions, no business logic.
- */
-import { FEE_TYPES } from './constants';
-/**
- * Format a number as currency
- * @param {number} value - Number to format
- * @returns {string} - Formatted currency string
- */
-export const formatCurrency = (value) => {
-  if (value === null || value === undefined) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-};
-/**
- * Format a number as percentage
- * @param {number} value - Number to format (as a decimal, e.g. 0.42 for 42%)
- * @returns {string} - Formatted percentage string
- */
-export const formatPercentage = (value) => {
-  if (value === null || value === undefined) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
-    style: 'percent',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-};
-/**
- * Generate fee references for different payment frequencies
- * NOTE: This is display logic for fee reference tables.
- * TODO: Consider moving to backend API for Sprint 4+
- * 
- * @param {Object} contract - Contract object
- * @param {number} baseAssets - Base asset amount for percentage calculations (optional)
- * @returns {Object|null} - Object with monthly, quarterly, and annual rates
- */
-export const generateFeeReferences = (contract, baseAssets = null) => {
-  if (!contract) return null;
-  let monthlyRate, quarterlyRate, annualRate;
-  if (contract.fee_type === FEE_TYPES.FLAT) {
-    if (contract.payment_schedule === 'monthly') {
-      monthlyRate = contract.flat_rate;
-      quarterlyRate = monthlyRate * 3;
-      annualRate = monthlyRate * 12;
-    } else {
-      quarterlyRate = contract.flat_rate;
-      monthlyRate = quarterlyRate / 3;
-      annualRate = quarterlyRate * 4;
-    }
-    return {
-      monthly: formatCurrency(monthlyRate),
-      quarterly: formatCurrency(quarterlyRate),
-      annual: formatCurrency(annualRate)
-    };
-  } else if (contract.percent_rate) {
-    const percentRate = contract.percent_rate;
-    if (baseAssets) {
-      if (contract.payment_schedule === 'monthly') {
-        monthlyRate = baseAssets * percentRate;
-        quarterlyRate = monthlyRate * 3;
-        annualRate = monthlyRate * 12;
-      } else {
-        quarterlyRate = baseAssets * percentRate;
-        monthlyRate = quarterlyRate / 3;
-        annualRate = quarterlyRate * 4;
-      }
-      return {
-        monthly: formatCurrency(monthlyRate),
-        quarterly: formatCurrency(quarterlyRate),
-        annual: formatCurrency(annualRate)
-      };
-    } else {
-      if (contract.payment_schedule === 'monthly') {
-        monthlyRate = percentRate * 100;
-        quarterlyRate = monthlyRate * 3;
-        annualRate = monthlyRate * 12;
-      } else {
-        quarterlyRate = percentRate * 100;
-        monthlyRate = quarterlyRate / 3;
-        annualRate = quarterlyRate * 4;
-      }
-      return {
-        monthly: `${monthlyRate.toFixed(3)}%`,
-        quarterly: `${quarterlyRate.toFixed(3)}%`,
-        annual: `${annualRate.toFixed(3)}%`
-      };
-    }
-  }
-  return null;
-};
 ```
 
 src\pages\_app.js
@@ -5373,88 +4380,6 @@ const UnderConstruction = () => {
   );
 };
 export default UnderConstruction; 
-```
-
-src\store\index.js
-```js
-import { create } from 'zustand';
-/**
- * Central application state store using Zustand
- */
-const useStore = create((set) => ({
-  selectedClientId: null,
-  setSelectedClientId: (clientId) => set({ selectedClientId: clientId }),
-  documentViewerOpen: false,
-  setDocumentViewerOpen: (isOpen) => set({ documentViewerOpen: isOpen }),
-  selectedDocumentUrl: null,
-  setSelectedDocumentUrl: (url) => set({ selectedDocumentUrl: url }),
-  isMobileMenuOpen: false,
-  setMobileMenuOpen: (isOpen) => set({ isMobileMenuOpen: isOpen }),
-  modalOpen: false,
-  modalContent: null,
-  openModal: (content) => set({ modalOpen: true, modalContent: content }),
-  closeModal: () => set({ modalOpen: false, modalContent: null }),
-}));
-export default useStore;
-```
-
-src\store\queries.js
-```js
-import { QueryClient } from '@tanstack/react-query';
-/**
- * Configured QueryClient for application-wide use
- */
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 5,
-      retry: (failureCount, error) => {
-        if (error?.message?.includes('API error') && error.message.includes('4')) {
-          return false;
-        }
-        return failureCount < 2;
-      },
-      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
-      onError: (error) => {
-        console.error('Query error:', error);
-      }
-    },
-    mutations: {
-      retry: (failureCount, error) => {
-        if (error?.message?.includes('API error') && error.message.includes('4')) {
-          return false;
-        }
-        return failureCount < 1;
-      },
-      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10000)
-    }
-  },
-});
-/**
- * Centralized query keys for better cache management
- */
-export const queryKeys = {
-  clients: {
-    all: ['clients'],
-    detail: (id) => ['clients', id],
-    contract: (id) => ['clients', id, 'contract'],
-    payments: (id) => ['clients', id, 'payments'],
-    summary: (id) => ['clients', id, 'summary'],
-    files: (id) => ['clients', id, 'files'],
-    dashboard: (id) => ['clients', id, 'dashboard'],
-  },
-  payments: {
-    all: ['payments'],
-    detail: (id) => ['payments', id],
-    files: (id) => ['payments', id, 'files'],
-  },
-  contracts: {
-    all: ['contracts'],
-    detail: (id) => ['contracts', id],
-    periods: (id, clientId) => ['contracts', id, 'periods', clientId],
-  },
-};
 ```
 
 src\styles\globals.css

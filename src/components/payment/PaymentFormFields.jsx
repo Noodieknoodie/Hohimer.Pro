@@ -2,8 +2,8 @@ import React from 'react';
 import DatePicker from '../ui/DatePicker';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
-import { PAYMENT_METHODS } from '../../lib/constants';
-import { formatCurrency } from '../../lib/formatUtils';
+import { PAYMENT_METHODS } from '../../utils/constants';
+import { formatCurrency } from '../../utils/formatters';
 
 /**
  * Form fields for payment entry/editing

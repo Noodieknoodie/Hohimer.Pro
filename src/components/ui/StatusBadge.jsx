@@ -1,5 +1,5 @@
 import React from 'react';
-import { STATUS_COLORS } from '../../lib/constants';
+import { STATUS_COLORS } from '../../utils/constants';
 
 /**
  * Status badge component for displaying statuses with appropriate colors
