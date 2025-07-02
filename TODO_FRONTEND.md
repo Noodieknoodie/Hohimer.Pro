@@ -4,7 +4,7 @@ Currency and Percentage Formatting: All monetary values come from the backend as
 Variance Status Visualization: While the backend calculates variance status (exact/acceptable/warning/alert), the frontend must map these to appropriate colors and styling. The old app used green for acceptable, yellow for warning, and red for alert variances in the payment history table.
 Payment Method Dropdown: The frontend needs to provide the standard payment method options: "Auto - ACH", "Auto - Check", "Invoice - Check", "Wire Transfer", and "Check". These aren't validated by the backend.
 Compliance Status Display: The dashboard now only returns green (paid) or yellow (due) status - no red. The frontend must reflect this simplified two-state system in the sidebar client list and dashboard cards.
-File Indicators: The backend returns a simple has_files boolean. The frontend should show a document icon next to payments that have associated files. No PDF rendering is needed - just the visual indicator.
+File Indicators: The backend returns a simple has_files boolean. The frontend should show a document icon next to payments that have associated files, and maintain the document viewer UI panel as a placeholder for future functionality. No actual PDF rendering backend is implemented yet.
 Form Validation: The payment form needs client-side validation for required fields (received_date, actual_fee, period selection) since the backend expects valid data. The old backend's validation rules should be implemented in React.
 Period Selection Logic: The frontend must properly display available periods from the backend and default to the most recent unpaid period, understanding that all payments are in arrears (one period back from current).
 The frontend essentially becomes responsible for all presentation logic while the backend handles data and business calculations. This clean separation means the frontend can be swapped out (web, mobile, etc.) without touching backend logic.
@@ -167,12 +167,16 @@ function formatAppliedPeriod(period_type, period, year) {
 
 ### **Document Viewer Component**
 
-**SIMPLIFY**:
-- Just show a file indicator icon
-- Remove all PDF rendering logic
-- Remove react-pdf dependency
-- Maybe just show file names if backend provides them
-- Consider removing the entire side panel viewer
+**KEEP THE UI**:
+- Keep the document viewer panel/sidebar UI as a placeholder
+- Show file names if backend provides them
+- Display a "Preview not available" message or similar placeholder content
+- Keep the slide-out panel functionality
+
+**REMOVE THE BACKEND**:
+- Remove PDF rendering logic (react-pdf)
+- Remove actual file fetching/display
+- No backend integration for now
 
 ### **Period Selection (PaymentFormFields)**
 
@@ -204,10 +208,10 @@ The AI assistant should:
 2. Remove split payment UI first - it touches everything
 3. Simplify status to 2-state (Due/Paid) throughout
 4. Test period selection carefully - the arrears logic is critical
-5. Verify file indicators work without PDF rendering
+5. Keep document viewer UI but show placeholder content
 
 ### **Dependencies to Remove**
-- react-pdf and related PDF packages
+- react-pdf and related PDF rendering packages (but keep the UI components)
 - Any complex date manipulation libraries if only used for split periods
 
 The overall theme is **SIMPLIFICATION**. The new backend handles more logic, periods are single not ranges, and status is binary not ternary. The frontend becomes a cleaner display layer.

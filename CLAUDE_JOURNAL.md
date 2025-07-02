@@ -170,7 +170,7 @@ npm run dev:teamsfx
 **Key Simplifications from Old System**:
 - Removed split payment functionality (single period only)
 - Removed overdue status (binary: Paid or Due)
-- Removed PDF viewer (just file indicators)
+- PDF viewer UI preserved but no backend implementation (placeholder only)
 - Simplified from Next.js to React SPA for Teams
 
 

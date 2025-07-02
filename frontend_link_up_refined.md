@@ -31,50 +31,17 @@ OLD: store/*                  → NEW: src/store/
 #### 4. Create These New Files
 
 **src/static/scripts/App.tsx**:
-```tsx
-import React from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useTeamsContext } from './m365agents';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      retry: 1,
-    },
-  },
-});
-
-export default function App() {
-  const { context, loading } = useTeamsContext();
-  
-  if (loading) {
-    return <div>Loading Teams context...</div>;
-  }
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {/* PageLayout and main app content will go here */}
-    </QueryClientProvider>
-  );
-}
-```
+Create a basic React app component that imports React Query for data fetching and the Teams context from m365agents. Set up a QueryClient with reasonable defaults (5 minute stale time, retry once). The component should check if Teams context is loading and show a loading message if so, otherwise wrap the app in a QueryClientProvider.
 
 **src/static/styles/app.css**:
-```css
-@import "tailwindcss";
+Create a CSS file that imports Tailwind CSS v4 using the new @import syntax. Add Teams-specific base styling using Segoe UI font family and appropriate background colors for Teams integration.
 
-/* Teams-specific styling */
-@layer base {
-  body {
-    @apply bg-gray-50 text-gray-900;
-    font-family: 'Segoe UI', system-ui, sans-serif;
-  }
-}
-```
+#### 5. Files to Modify When Copying
+- ⚠️ DocumentViewer components - Keep UI but remove PDF rendering
+- ⚠️ Layout components - Keep document panel structure
 
-#### 5. DO NOT Copy These
-- ❌ Any DocumentViewer or PDF-related components
+#### 6. DO NOT Copy These
+- ❌ react-pdf library and PDF rendering logic
 - ❌ SplitPaymentControls or split payment logic
 - ❌ Next.js specific files (pages/, _app.tsx, _document.tsx)
 - ❌ API routes directory
@@ -102,235 +69,120 @@ After copying the files, tell the AI:
 ### Phase 2: Adapt Components from Next.js to React
 
 1. **Replace Next.js imports**:
-   ```typescript
-   // OLD
-   import Link from 'next/link';
-   import { useRouter } from 'next/router';
-   
-   // NEW
-   import { Link } from 'react-router-dom'; // or use regular <a> tags
-   // For navigation, use Zustand store or React state
-   ```
+   - Change all Next.js Link components to regular anchor tags or React Router links if you add routing
+   - Replace useRouter from Next.js with Zustand store or React state for navigation
+   - Remove any Next.js specific hooks and utilities
 
 2. **Update Image components**:
-   ```typescript
-   // OLD
-   import Image from 'next/image';
-   
-   // NEW
-   // Use regular <img> tags
-   ```
+   - Replace Next.js Image components with regular HTML img tags
+   - Remove any Next.js image optimization features
 
 ### Phase 3: Integrate with Existing API Service
 
-1. **Update all API calls** to use `src/services/api.ts`:
-   ```typescript
-   // OLD
-   const response = await fetch('/api/clients');
-   const data = await response.json();
-   
-   // NEW
-   import { api } from '@/services/api';
-   const data = await api.clients.list();
-   ```
+1. **Update all API calls** to use the existing TypeScript API service at `src/services/api.ts`:
+   - Replace all direct fetch calls with the typed API service methods
+   - Change from relative API routes to using the api object methods
+   - For example, fetching clients changes from calling '/api/clients' to calling api.clients.list()
 
 2. **Update React Query hooks**:
-   ```typescript
-   // In src/hooks/useClients.ts
-   import { useQuery } from '@tanstack/react-query';
-   import { api } from '@/services/api';
-   
-   export function useClients(provider?: string) {
-     return useQuery({
-       queryKey: ['clients', provider],
-       queryFn: () => api.clients.list(provider),
-     });
-   }
-   ```
+   - Import the api service into your custom hooks
+   - Update query functions to use the typed API methods
+   - Maintain the same query key structure for caching
+   - Pass any parameters (like provider filters) directly to the API methods
 
 ### Phase 4: Remove Split Payment Features
 
 1. **PaymentForm.tsx modifications**:
-   ```typescript
-   // REMOVE all of this:
-   - is_split_payment state
-   - handleSplitToggle function
-   - SplitPaymentControls component
-   - start_period/end_period fields
-   
-   // REPLACE with:
-   const [formData, setFormData] = useState({
-     client_id: clientId,
-     contract_id: contractId,
-     received_date: '',
-     total_assets: '',
-     actual_fee: '',
-     applied_period_type: contract?.payment_schedule || 'quarterly',
-     applied_period: 0,
-     applied_year: new Date().getFullYear(),
-     method: 'Check',
-     notes: ''
-   });
-   ```
+   - Remove all split payment state variables and toggle functionality
+   - Delete the SplitPaymentControls component import and usage
+   - Remove start_period and end_period fields entirely
+   - Replace with a single period selection using applied_period_type, applied_period, and applied_year
+   - Simplify the form data structure to only track one payment period
+   - Default the payment method to 'Check' and include standard fields like received_date, total_assets, actual_fee, and notes
 
 2. **PaymentHistory.tsx simplification**:
-   ```typescript
-   // REMOVE:
-   - Expandable row logic
-   - ExpandedPaymentDetails component
-   - Chevron icons
-   
-   // Period display becomes:
-   <td>{formatAppliedPeriod(
-     payment.applied_period_type,
-     payment.applied_period,
-     payment.applied_year
-   )}</td>
-   ```
+   - Remove all expandable row functionality and state
+   - Delete the ExpandedPaymentDetails component
+   - Remove chevron icons used for expanding rows
+   - Display the single period using the formatAppliedPeriod utility function
+   - Show period as "March 2024" for monthly or "Q1 2024" for quarterly payments
 
 ### Phase 5: Implement Binary Status System
 
 1. **Update StatusBadge component**:
-   ```typescript
-   type StatusType = 'paid' | 'due'; // Remove 'overdue'
-   
-   const statusStyles = {
-     paid: 'bg-green-100 text-green-800',
-     due: 'bg-yellow-100 text-yellow-800',
-     // Remove overdue styles
-   };
-   ```
+   - Remove the 'overdue' status type, keeping only 'paid' and 'due'
+   - Update styling to show green for paid status and yellow for due status
+   - Remove any red color styling that was used for overdue
+   - Simplify the component to handle only two states
 
 2. **Update ClientList.tsx**:
-   ```typescript
-   // Use dashboard data from API
-   const getStatusColor = (status: string) => {
-     return status === 'Paid' ? 'text-green-600' : 'text-yellow-600';
-   };
-   
-   // Remove all overdue period tracking
-   ```
+   - Use the dashboard data from the API which now returns only 'Paid' or 'Due' status
+   - Update status color logic to return green for 'Paid' and yellow for 'Due'
+   - Remove all logic that tracks or displays overdue periods
+   - Remove any arrays or lists of missing payment periods
 
 3. **Simplify ComplianceCard.tsx**:
-   ```typescript
-   // Just display the status from backend
-   <StatusBadge status={dashboardData.payment_status.status} />
-   <p>{dashboardData.compliance.reason}</p>
-   // Remove Missing Payments section entirely
-   ```
+   - Display only the status badge using the binary status from the backend
+   - Show the compliance reason text provided by the backend
+   - Completely remove the "Missing Payments" section
+   - Remove any logic that calculates or displays overdue information
 
 ### Phase 6: Create Period Selection Component
 
 1. **New PeriodSelector.tsx**:
-   ```typescript
-   import { useQuery } from '@tanstack/react-query';
-   import { api } from '@/services/api';
-   
-   export function PeriodSelector({ 
-     clientId, 
-     contractId, 
-     value, 
-     onChange 
-   }: Props) {
-     const { data: periods } = useQuery({
-       queryKey: ['periods', clientId, contractId],
-       queryFn: () => api.periods.getAvailable(clientId, contractId),
-     });
-     
-     return (
-       <select value={value} onChange={onChange}>
-         {periods?.periods.map(period => (
-           <option key={period.value} value={period.value}>
-             {period.label}
-           </option>
-         ))}
-       </select>
-     );
-   }
-   ```
+   - Create a new component that fetches available periods from the API
+   - Use React Query to call the periods endpoint with client and contract IDs
+   - Display periods as a dropdown/select element
+   - Each period should show a user-friendly label like "Q1 2024" or "March 2024"
+   - The component should handle loading and error states appropriately
+   - Default to selecting the first available period (most recent unpaid)
 
 ### Phase 7: Update Formatting Utilities
 
 1. **In src/utils/formatters.ts**:
-   ```typescript
-   export function formatCurrency(amount: number | null | undefined): string {
-     if (amount == null) return '-';
-     return new Intl.NumberFormat('en-US', {
-       style: 'currency',
-       currency: 'USD',
-     }).format(amount);
-   }
-   
-   export function formatPercentage(rate: number | null | undefined): string {
-     if (rate == null) return '-';
-     return `${(rate * 100).toFixed(2)}%`;
-   }
-   
-   export function formatAppliedPeriod(
-     type: 'monthly' | 'quarterly',
-     period: number,
-     year: number
-   ): string {
-     if (type === 'monthly') {
-       const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                      'July', 'August', 'September', 'October', 'November', 'December'];
-       return `${months[period - 1]} ${year}`;
-     }
-     return `Q${period} ${year}`;
-   }
-   ```
+   - Create or update formatCurrency function to handle null/undefined values and format numbers as USD currency
+   - Create formatPercentage function that converts decimal rates (0.0025) to percentage strings (0.25%)
+   - Add formatAppliedPeriod function that takes period type, number, and year
+   - For monthly periods, convert number (1-12) to month name (January-December)
+   - For quarterly periods, format as Q1, Q2, Q3, or Q4
+   - Ensure all formatters handle edge cases and null values gracefully
 
-### Phase 8: Remove Document Features
+### Phase 8: Update Document Features
 
-1. **Delete entirely**:
-   - DocumentViewer component
-   - Any PDF rendering logic
-   - File upload components
+1. **Keep the UI components**:
+   - Preserve the DocumentViewer component structure and styling
+   - Maintain the slide-out panel functionality from the right side
+   - Keep the file list display if backend provides file names
 
-2. **Replace with simple indicator**:
-   ```typescript
-   {payment.has_files && (
-     <DocumentIcon className="w-4 h-4 text-gray-500" />
-   )}
-   ```
+2. **Remove backend integration**:
+   - Remove all PDF rendering logic and the react-pdf library
+   - Remove actual file fetching and loading functionality
+   - Keep the UI shell but remove the content display logic
+
+3. **Add placeholder content**:
+   - Update DocumentViewer to show a "Preview functionality coming soon" message
+   - Display file names if available from the backend
+   - Keep the open/close functionality and animations
+   - Show a gray placeholder area where the PDF would normally render
+   - Maintain all the UI state management for opening and closing the viewer
 
 ### Phase 9: Wire Everything Together
 
 1. **Update App.tsx**:
-   ```typescript
-   import PageLayout from '@/components/layout/PageLayout';
-   import ClientList from '@/components/clients/ClientList';
-   import Dashboard from '@/components/dashboard/Dashboard';
-   import { useStore } from '@/store';
-   
-   export default function App() {
-     const { selectedClientId } = useStore();
-     
-     return (
-       <QueryClientProvider client={queryClient}>
-         <PageLayout>
-           <div className="flex h-full">
-             <ClientList />
-             {selectedClientId && <Dashboard clientId={selectedClientId} />}
-           </div>
-         </PageLayout>
-       </QueryClientProvider>
-     );
-   }
-   ```
+   - Import the main layout components: PageLayout, ClientList, and Dashboard
+   - Use the Zustand store to manage selected client state
+   - Set up the main app structure with a flex layout
+   - Show ClientList on the left side
+   - Conditionally render Dashboard when a client is selected
+   - Wrap everything in the QueryClientProvider for data fetching
 
 2. **Update store for simple state**:
-   ```typescript
-   interface AppState {
-     selectedClientId: number | null;
-     setSelectedClient: (id: number | null) => void;
-   }
-   
-   export const useStore = create<AppState>((set) => ({
-     selectedClientId: null,
-     setSelectedClient: (id) => set({ selectedClientId: id }),
-   }));
-   ```
+   - Create an interface for the app state with selected client tracking
+   - Add document viewer state (open/closed and selected document)
+   - Include setter functions for updating client selection
+   - Include setter function for controlling document viewer
+   - Keep the store simple and focused on UI state only
+   - Remove any complex state that's now handled by the backend
 
 ### Phase 10: Final Cleanup
 
@@ -395,6 +247,6 @@ The migration is complete when:
 2. ✅ Status is only Paid (green) or Due (yellow)
 3. ✅ All API calls use the typed service
 4. ✅ Payment form accepts single periods only
-5. ✅ No document viewing, just indicators
+5. ✅ Document viewer UI preserved with placeholder content
 6. ✅ Works within Teams Tab environment
 7. ✅ Uses Tailwind v4 with @import syntax

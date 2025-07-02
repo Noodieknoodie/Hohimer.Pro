@@ -58,13 +58,16 @@ From your old frontend repository, you need to copy these specific directories a
    @import "tailwindcss";
    ```
 
-### Step 2: DO NOT Copy These Files
+### Step 2: Files to Copy but Modify
+
+**Copy these but they'll need updates**:
+- DocumentViewer components (keep UI, remove PDF rendering)
+- Layout components with document viewer (keep structure)
 
 **Skip these entirely** - they contain complexity we're removing:
-- Any DocumentViewer components
 - SplitPaymentControls component
 - Complex period calculation utilities
-- PDF-related components
+- PDF rendering libraries/logic
 - Next.js specific files (pages/, api/, next.config.js)
 
 ### Step 3: Note File Modifications Needed
@@ -165,7 +168,7 @@ Once the raw materials are in place, perform these modifications in order:
 2. **Update Layout components**:
    - Remove Next.js Link components, use regular navigation
    - Ensure responsive design for Teams sidebar width
-   - Remove document viewer panel
+   - Keep document viewer panel but update to show placeholder content
 
 3. **Style Updates**:
    - Convert Tailwind v3 classes to v4 where needed
@@ -191,17 +194,29 @@ Once the raw materials are in place, perform these modifications in order:
      }
      ```
 
-### Phase 6: Remove Document Handling
+### Phase 6: Update Document Handling
 
-1. **Remove these entirely**:
-   - DocumentViewer component
+1. **Keep the UI structure**:
+   - DocumentViewer component (modify to show placeholder)
+   - Slide-out panel functionality
+   - File list display if available
+
+2. **Remove the backend integration**:
    - PDF rendering logic
    - react-pdf dependency
-   - File upload components
+   - Actual file fetching
 
-2. **Keep only file indicators**:
-   - Show document icon when `has_files` is true
-   - No interactive file features
+3. **Add placeholder content**:
+   ```typescript
+   // In DocumentViewer component
+   <div className="p-4">
+     <h3>Document Preview</h3>
+     <p className="text-gray-500">
+       Preview functionality coming soon
+     </p>
+     {/* Show file list if available */}
+   </div>
+   ```
 
 ### Phase 7: Update Utilities
 
@@ -218,7 +233,7 @@ Once the raw materials are in place, perform these modifications in order:
 ### Phase 8: State Management
 
 1. **Update Zustand store**:
-   - Remove document viewer state
+   - Keep document viewer state (open/closed, selected file)
    - Simplify client selection state
    - Remove split payment related state
 

@@ -130,7 +130,7 @@ func start
 
 ## What’s NOT Included
 
-- Document/file handling (UI components exist but no backend)
+- Document/file backend (UI components exist as placeholders, no PDF rendering)
 - Payment approval workflows
 - Batch processing
 - Email notifications
@@ -142,7 +142,7 @@ func start
 - Old system had split payments - all converted to single periods
 - Old system had complex overdue logic - removed
 - Old system used local SQLite - now Azure SQL
-- File associations exist in schema but not implemented
+- File associations exist in schema but backend not implemented (UI preserved)
 
 ## Testing
 
