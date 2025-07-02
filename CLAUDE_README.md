@@ -1,134 +1,168 @@
-# 401(k) Payment Tracking System - Developer Reference
+# 401k Payment Tracking System - Developer Guide
 
-## Overview
+## What This Is
 
-The 401(k) Payment Tracking System is a Teams Tab application that tracks advisor fee payments for 401(k) plans. It replaces manual Excel-based tracking with a streamlined Azure SQL database and web interface, ensuring accurate record-keeping and compliance.
-
-THIS IS A SMALL SCALE APP THAT WILL NOT HAVE CONCURRENT USERS  
-A MICROAPP FOR A LOCAL SMALL FINANCIAL ADVISORY FIRM  
-CLIENTS ARE COMPANIES WHO OFFER 401k PLANS TO THEIR EMPLOYEES  
-PROVIDERS ARE THE CUSTODIANS WHO THE PLANS LIVE AT  
-WE ARE THE ONES WHO MANAGE THE ACCOUNTS AND CHOOSE INVESTMENTS, ETC.
+A simple Teams Tab app for tracking quarterly/monthly 401k payments from retirement plan providers. Used internally by a small financial advisory firm (~3 users) to record when client payments arrive and ensure they match expected fees.
 
 ## Architecture
 
-- **Platform**: Microsoft Teams Tab (Agent 365 Toolkit)
-- **Database**: Azure SQL Database
-- **api**: Python/Azure Functions
-- **src**: React/Next.js with Tailwind CSS
-- **Environment**: Cloud-hosted via Azure
+```
+Teams Tab (React) → Azure Functions API → Azure SQL Database
+     ↓                      ↓                     ↓
+Static web app      Serverless endpoints   Managed cloud DB
+```
 
-**Use Azure Functions with HTTP triggers only. Pydantic models are used for validation.**  
-**Do not implement document preview functionality. The viewer can be non-functional — skip all PDF rendering work.**
+## Key Business Logic
+
+### Payment Tracking
+
+- Payments are recorded **after** they’re received (checks in hand)
+- Each payment applies to a **single period** (Q1-Q4 or months 1-12)
+- Payments can be applied retroactively to any unpaid period
+- No split payments across multiple periods anymore
+
+### Fee Calculations
+
+- All fees in the database are already adjusted for payment frequency
+- Annual rates are pre-divided by 4 (quarterly) or 12 (monthly)
+- Two fee types: `flat` (fixed dollar amount) or `percentage` (% of assets)
+- Expected fees auto-calculate based on contract terms
+
+### Payment Status
+
+- Binary status: **Paid** (green) or **Due** (yellow)
+- No overdue/red status - just tracks if current period is paid
+- “Current period” = one period back from today (payments in arrears)
 
 ## Database Schema
 
 ### Core Tables
 
-#### clients
-Stores client information and plan details.
-- `client_id` - Primary key
-- `display_name` - Short name for UI display (e.g., "AirSea America")
-- `full_name` - Legal plan name (e.g., "THE TRUSTEES OF AIRSEA AMERICA INC 401K PLAN AND TRUST")
-- `ima_signed_date` - Investment Management Agreement date
-- `onedrive_folder_path` - Path to client's document folder
-- `valid_from`, `valid_to` - Temporal validity tracking
+- **clients** - Client records with display names
+- **contracts** - Fee structures and payment schedules
+- **payments** - Individual payment records with single period
+- **client_metrics** - Aggregated payment summaries
+- **quarterly_summaries** - Period rollups for reporting
 
-#### contracts
-Defines fee agreements between the firm and clients.
-- `contract_id` - Primary key
-- `client_id` - Foreign key to clients
-- `provider_name` - 401(k) provider (e.g., "John Hancock", "Voya")
-- `fee_type` - Either "percentage" or "flat"
-- `percent_rate` - Rate for percentage-based fees (stored as decimal, e.g., 0.0025 for 0.25%)
-- `flat_rate` - Dollar amount for flat fees
-- `payment_schedule` - Either "monthly" or "quarterly"
-- `num_people` - Participant count in the plan
+### Key Fields
 
-#### payments
-Records actual fee payments received. Each payment applies to exactly one period.
-- `payment_id` - Primary key
-- `contract_id`, `client_id` - Foreign keys
-- `received_date` - When payment was received
-- `total_assets` - Plan assets for the period (used for percentage fee calculations)
-- `expected_fee` - Calculated expected amount
-- `actual_fee` - Amount actually received
-- `method` - Payment method (e.g., "Auto - ACH", "Auto - Check")
-- **Period Tracking Fields**:
-  - `applied_period_type` - Either "monthly" or "quarterly"
-  - `applied_period` - Period number (1-12 for months, 1-4 for quarters)
-  - `applied_year` - Year the payment applies to
+```sql
+payments:
+  - applied_period_type: 'monthly' or 'quarterly'
+  - applied_period: 1-12 for months, 1-4 for quarters
+  - applied_year: e.g., 2025
+  - actual_fee: What we received
+  - expected_fee: What we should have received
+```
 
-#### Supporting Tables
-- `contacts` - Primary and provider contacts for each client
-- `client_files` - Tracks uploaded documents (checks, statements)
-- `payment_files` - Links payments to their supporting documents
-- `client_metrics` - Cached calculations for dashboard performance
-- `quarterly_summaries`, `yearly_summaries` - Pre-aggregated data for reporting
+## API Endpoints
 
-### Views
+```
+GET  /api/clients                 - List all clients
+GET  /api/dashboard/{client_id}   - Complete client view
+GET  /api/payments                - Create/read/update/delete payments  
+GET  /api/periods?client_id=X     - Get unpaid periods for dropdowns
+GET  /api/contracts/{id}          - Contract details
+```
 
-#### client_payment_status
-Provides current payment status for each client by joining clients, contracts, and their most recent payment. Used to determine which periods are paid/unpaid.
+## Frontend State
 
-#### payment_file_view
-Joins payments with their linked files for easy document access.
+### Key Components
 
-## Business Logic
+- **ClientList** - Main navigation sidebar
+- **ClientDashboard** - Payment history and metrics
+- **PaymentForm** - Add/edit payment modal
+- **ComplianceIndicator** - Green/yellow status badge
 
-### Payment Periods
+### State Management
 
-**All payments are in arrears** — fees are collected after the service period ends.
+- Zustand for global state (selected client, modals)
+- React Query for API data caching
+- No Redux, no complex state machines
 
-For a given date (e.g., March 13, 2025):
-- **Monthly contracts**: Collecting for February 2025 (current month - 1)
-- **Quarterly contracts**: Collecting for Q4 2024 (current quarter - 1)
+## Development Setup
 
-### Expected Fee Calculation
+### Prerequisites
 
-Expected fees depend on the contract type:
-- **Flat fee contracts**: Expected fee = contract's `flat_rate`
-- **Percentage fee contracts**: Expected fee = `percent_rate × total_assets`
-  - If current period assets are unavailable, fallback to most recent known assets
-  - Show visual indicator when fallback occurs
+- Node.js 24.1.0
+- Python 3.13.3
+- Azure CLI (logged in)
+- ODBC Driver 18 for SQL Server
 
-### Payment Status Determination
+### Environment Variables
 
-- **Due**: No payment recorded for the current collection period
-- **Paid**: Payment exists for the current collection period
-- No overdue status — any unpaid period is simply "Due"
+```env
+SQL_SERVER=hohimerpro-db-server.database.windows.net
+SQL_DATABASE=HohimerPro-401k
+SQL_AUTH=ActiveDirectory
+```
 
-### Missing Payments Identification
+### Running Locally
 
-Lists all unpaid periods between the last paid period and the current collection period.
+```bash
+# Frontend (Teams Tab)
+npm install
+npm run dev
 
-Example: If current collection period is Q1 2025 and last payment was for Q2 2024:  
-Missing = Q3 2024, Q4 2024, Q1 2025
+# Backend (Azure Functions)
+cd api
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+func start
+```
 
-### Date Formatting Conventions
+## Common Tasks
 
-- Displayed dates: "Month Day, Year" (e.g., "March 13, 2025")
-- Currency: "$X,XXX.XX" format
-- Database storage: ISO format (YYYY-MM-DD)
+### Adding a Payment
 
-## Data Characteristics
+1. User selects client from sidebar
+1. Clicks “New Payment” button
+1. Selects period from dropdown (only unpaid periods shown)
+1. Enters check amount and date received
+1. System calculates variance from expected fee
 
-- **Client Volume**: ~30-50 active clients
-- **Payment Volume**: ~1,000 payments annually
-- **Providers**: Primarily John Hancock, Voya, Empower, Principal, Ascensus
-- **Payment Methods**: Mostly automated (ACH/Check), some manual
-- **Asset Range**: $40K to $10M+ per plan
+### Viewing Status
 
-## Key Implementation Notes
+- Dashboard shows if current period is paid
+- Metrics show YTD totals and averages
+- Recent payments list shows last 5 entries
 
-1. **Period Tracking**: Payment records use a simplified three-field system: `applied_period_type`, `applied_period`, and `applied_year`. Each payment maps to exactly one period.
-2. **Temporal Data**: Most tables include `valid_from` and `valid_to` fields for historical tracking. Only records with `valid_to IS NULL` are considered active.
-3. **Triggers**: Database triggers automatically update quarterly and yearly summary tables when new payments are recorded.
-4. **Real-time Updates**: The frontend is expected to update UI state instantly upon any data change — no manual refresh required.
-5. **File Integration**: OneDrive folder paths are stored for clients, but the system only tracks metadata (file presence, names). Rendering or access is handled externally.
+## What’s NOT Included
 
-## Connection Details
+- Document/file handling (UI components exist but no backend)
+- Payment approval workflows
+- Batch processing
+- Email notifications
+- Complex compliance rules
+- User roles/permissions (Teams handles auth)
 
-The application connects to Azure SQL Database. Use standard Azure SQL connection strings with appropriate authentication.
+## Migration Notes
 
-_See `api/database/database_schema_dump.txt` for full schema._
+- Old system had split payments - all converted to single periods
+- Old system had complex overdue logic - removed
+- Old system used local SQLite - now Azure SQL
+- File associations exist in schema but not implemented
+
+## Testing
+
+```bash
+# Backend unit tests
+cd api
+pytest tests/
+
+# Quick API test
+python tests/backend_tests/test_api.py
+```
+
+## Deployment
+
+Via Teams Toolkit in VS Code:
+
+1. `Teams: Provision in the cloud`
+1. `Teams: Deploy to the cloud`
+1. `Teams: Publish to Teams`
+
+-----
+
+That’s it. It’s a glorified spreadsheet for tracking payments. Keep it simple.​​​​​​​​​​​​​​​​
