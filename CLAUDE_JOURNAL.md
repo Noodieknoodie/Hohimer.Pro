@@ -6,10 +6,10 @@
 
 **TECH STACK**:
 - **Platform**: Microsoft Teams Tab (Teams Toolkit)
-- **Backend**: Python/FastAPI in `/api` directory  
+- **Backend**: Python/FastAPI deployed as Azure Functions in `/api` directory  
 - **Database**: Azure SQL Database with Azure AD auth
-- **Frontend**: React/Next.js with Tailwind CSS
-- **Testing**: Pytest with 48 passing tests
+- **Frontend**: React with Tailwind CSS v4 (migrating from Next.js)
+- **Testing**: Backend - Pytest (48 passing), Frontend - Jest configured
 
 **BUSINESS CONTEXT**: 
 - Tracks ~30-50 active 401(k) plan clients
@@ -31,25 +31,48 @@
 - Comprehensive validation (rates, periods, emails)
 - Transaction support with automatic rollback
 
-**Test Suite** (`/tests/backend_tests/`)
-- 48 passing tests covering models, CRUD, and edge cases
-- Mock fixtures for unit testing
-- Integration tests (skipped without DB credentials)
-- All imports updated for new `/api` structure
+**Azure Functions API** (`/api/`)
+- All HTTP triggers configured with function.json files
+- Fixed import paths (was `../../backend`, now `..`)
+- Endpoints: clients, contracts, payments, dashboard, periods, calculations
+- RESTful design with proper HTTP status codes
+- Direct database access via context managers
+
+**Frontend Infrastructure**
+- TypeScript API service layer (`/src/services/api.ts`)
+- Complete type definitions matching backend models
+- Error handling with custom ApiError class
+- React Query integration ready
+- Jest testing configured with 19 passing API tests
+- Vite build system with Teams integration
+
+**Test Suites**
+- Backend: 48 passing Pytest tests
+- Frontend API: 19 passing Jest tests
+- Mock fixtures and integration test support
 
 **Project Structure**
-- `/api/` - Backend code (moved from `/backend/`)
+- `/api/` - Backend Azure Functions
 - `/api/.venv/` - Python virtual environment
+- `/src/` - Frontend React app
 - `/venv/` - Teams Toolkit config files
-- Azure Functions config (`host.json`, `local.settings.json`)
+- Teams manifest and configuration ready
 
-### 🚧 READY TO BUILD
+### 🚧 IN PROGRESS
 
-1. **Azure Functions HTTP triggers**
-2. **Frontend Components** - MIGRATE OVER AND SET IT UP TO WORK WITH NEW
-3. **Authentication** - Integrate Teams auth with API
-4. **File Upload** - SKIPPING 
-5. **Dashboard** - Metrics and payment summaries TBD
+**Frontend Migration** 
+- Migration plan created (`frontend_link_up_refined.md`)
+- Waiting for old frontend components to be copied
+- Will adapt from Next.js to React SPA
+- Remove split payments and overdue status
+- Simplify to binary status (Paid/Due only)
+
+### 📋 TODO
+
+1. **Frontend Components** - Copy and adapt from old codebase
+2. **Authentication** - Integrate Teams auth with API
+3. **Dashboard Views** - Client list, payment forms, history
+4. **Deployment** - Teams Toolkit provision and publish
 
 ---
 
@@ -58,16 +81,27 @@
 **Backend**
 - `/api/database/database.py` - Core DB operations
 - `/api/database/models.py` - All Pydantic models
+- `/api/calculations/function.json` - Newly added for variance endpoint
 - `/api/requirements.txt` - Python dependencies
+
+**Frontend**
+- `/src/services/api.ts` - Complete TypeScript API client
+- `/src/services/__tests__/api.test.ts` - API service tests
+- `/src/static/scripts/app.tsx` - Teams Tab entry point
+- `/package.json` - Updated with Jest and testing deps
 
 **Documentation**
 - `/DEVELOPER.md` - Complete database schema
+- `/CLAUDE_README.md` - Developer guide
+- `/TODO_FRONTEND.md` - Frontend requirements
+- `/frontend_link_up_refined.md` - Migration plan
 - `/api/CLAUDE.md` - Backend coding standards
-- `/frontend/CLAUDE.md` - Frontend guidelines
 
 **Configuration**
 - `/api/local.settings.json` - Azure Functions config
 - `/venv/.env.local` - Teams app environment
+- `/jest.config.js` - Jest test configuration
+- `/postcss.config.js` - Tailwind v4 setup
 
 ---
 
@@ -81,15 +115,28 @@ cd ..\tests
 pytest
 ```
 
-**Azure Functions**:
+**Frontend Tests**:
+```bash
+npm test
+# or for specific test file:
+npm test -- --testPathPattern=api.test.ts
+```
+
+**Azure Functions** (Backend API):
 ```powershell
 cd api
 func start
 ```
 
+**Frontend Development** (Teams Tab):
+```bash
+npm run dev:teamsfx
+```
+
 **Environment Variables Required**:
 - `SQL_SERVER` - Azure SQL server name
 - `SQL_DATABASE` - Database name
+- `REACT_APP_API_URL` - API endpoint (defaults to http://localhost:7071/api)
 - Azure AD credentials (automatic via DefaultAzureCredential)
 
 ---
@@ -101,9 +148,31 @@ func start
 **2 Views**: client_payment_status, payment_file_view
 
 **Key Features**:
-- Temporal tracking (valid_from/valid_to)
-- Supports percentage and flat fee contracts
-- Payment period validation
-- All payments in arrears
+- Temporal tracking (valid_from/valid_to for soft deletes)
+- Supports percentage (0.0025 = 0.25%) and flat fee contracts
+- Payment period validation (1-12 monthly, 1-4 quarterly)
+- All payments in arrears (one period behind current)
+- Automated metrics via database triggers
+- No split payments (simplified from old system)
+
+---
+
+## RECENT CHANGES
+
+**2025-07-02**:
+- Created missing `calculations/function.json` for variance endpoint
+- Fixed all Azure Function import paths from `../../backend` to `..`
+- Added temporal fields (valid_from/to) to frontend TypeScript interfaces
+- Created comprehensive API service test suite (19 tests)
+- Configured Jest testing framework for frontend
+- Created detailed frontend migration plan documents
+
+**Key Simplifications from Old System**:
+- Removed split payment functionality (single period only)
+- Removed overdue status (binary: Paid or Due)
+- Removed PDF viewer (just file indicators)
+- Simplified from Next.js to React SPA for Teams
+
+
 
 

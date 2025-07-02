@@ -11,7 +11,7 @@ import os
 from typing import Dict, Any
 
 # Add backend to path to use existing database code
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../backend'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from database.database import get_db
 from database.models import Client, ClientCreate, ClientUpdate

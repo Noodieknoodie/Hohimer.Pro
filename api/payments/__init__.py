@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../backend'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from database.database import get_db
 from database.models import Payment, PaymentCreate, PaymentUpdate
