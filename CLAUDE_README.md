@@ -85,7 +85,7 @@ GET  /api/contracts/{id}          - Contract details
 ### Prerequisites
 
 - Node.js 24.1.0
-- Python 3.13.3
+- Python 3.12
 - Azure CLI (logged in)
 - ODBC Driver 18 for SQL Server
 

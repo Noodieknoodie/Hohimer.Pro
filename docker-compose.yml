@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  api:
+    build: ./api
+    ports:
+      - "7071:80"
+    environment:
+      - AzureWebJobsStorage=UseDevelopmentStorage=true
+      - FUNCTIONS_WORKER_RUNTIME=python
+      - WEBSITE_HOSTNAME=localhost:7071
+    volumes:
+      - ./api:/home/site/wwwroot

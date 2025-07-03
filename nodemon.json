@@ -1,7 +1,9 @@
 {
-  "watch": ["src"],
+  "watch": [
+    "src"
+  ],
   "ext": "*",
-  "exec": "node --inspect=9239 -r ts-node/register src/app.ts",
+  "exec": "node --loader ts-node/esm ./lib/app.js",
   "signal": "SIGINT",
   "events": {
     "restart": "npm run build:frontend"

@@ -3,3 +3,4 @@ pyodbc
 pydantic
 azure-identity
 python-dotenv
+six>=1.16.0
