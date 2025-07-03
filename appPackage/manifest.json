@@ -4,24 +4,24 @@
     "version": "1.0.0",
     "id": "${{TEAMS_APP_ID}}",
     "developer": {
-        "name": "My App, Inc.",
-        "websiteUrl": "https://www.example.com",
-        "privacyUrl": "https://www.example.com/privacy",
-        "termsOfUseUrl": "https://www.example.com/termsofuse"
+        "name": "Hohimer Wealth Management",
+        "websiteUrl": "https://hohimer.com",
+        "privacyUrl": "https://hohimer.com/privacy",
+        "termsOfUseUrl": "https://hohimer.com/terms"
     },
     "icons": {
         "color": "color.png",
         "outline": "outline.png"
     },
     "name": {
-        "short": "HohimerPro_Azure${{APP_NAME_SUFFIX}}",
-        "full": "Full name for HohimerPro_Azure"
+        "short": "HohimerPro${{APP_NAME_SUFFIX}}",
+        "full": "401(k) Payment Tracking System"
     },
     "description": {
-        "short": "Short description of HohimerPro_Azure",
-        "full": "Full description of HohimerPro_Azure"
+        "short": "Track advisor fee payments for 401(k) plans",
+        "full": "Investment management suite for tracking and managing 401(k) advisor fee payments across multiple providers including John Hancock, Voya, Empower, Principal, and Ascensus."
     },
-    "accentColor": "#FFFFFF",
+    "accentColor": "#2563EB",
     "bots": [],
     "composeExtensions": [],
     "staticTabs": [

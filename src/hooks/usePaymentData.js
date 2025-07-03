@@ -14,18 +14,12 @@ export const usePaymentHistory = (clientId, options = {}) => {
   if (year !== null) {
     params.year = year;
   }
-  return useQuery(
-    [...queryKeys.clients.payments(clientId), page, limit, year],
-    () => api.getPayments(clientId, params),
-    {
-      enabled: !!clientId,
-      keepPreviousData: true,
-      staleTime: 1000 * 60, 
-      onError: (error) => {
-        console.error(`Error fetching payments for client ${clientId}:`, error);
-      }
-    }
-  );
+  return useQuery({
+    queryKey: [...queryKeys.clients.payments(clientId), page, limit, year],
+    queryFn: () => api.payments.list(clientId, year),
+    enabled: !!clientId,
+    staleTime: 1000 * 60,
+  });
 };
 /**
  * Hook to fetch a single payment
@@ -33,17 +27,12 @@ export const usePaymentHistory = (clientId, options = {}) => {
  * @returns {Object} - Query result with payment data
  */
 export const usePayment = (paymentId) => {
-  return useQuery(
-    queryKeys.payments.detail(paymentId),
-    () => api.getPayment(paymentId),
-    {
-      enabled: !!paymentId,
-      staleTime: 1000 * 60, 
-      onError: (error) => {
-        console.error(`Error fetching payment ${paymentId}:`, error);
-      }
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.payments.detail(paymentId),
+    queryFn: () => api.payments.get(paymentId),
+    enabled: !!paymentId,
+    staleTime: 1000 * 60,
+  });
 };
 /**
  * Hook to fetch available periods for a contract
@@ -52,17 +41,12 @@ export const usePayment = (paymentId) => {
  * @returns {Object} - Query result with periods data
  */
 export const useAvailablePeriods = (contractId, clientId) => {
-  return useQuery(
-    queryKeys.contracts.periods(contractId, clientId),
-    () => api.getAvailablePeriods(contractId, clientId),
-    {
-      enabled: !!contractId && !!clientId,
-      staleTime: 1000 * 60 * 60, 
-      onError: (error) => {
-        console.error(`Error fetching periods for contract ${contractId}:`, error);
-      }
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.contracts.periods(contractId, clientId),
+    queryFn: () => api.periods.available(clientId, contractId),
+    enabled: !!contractId && !!clientId,
+    staleTime: 1000 * 60 * 60,
+  });
 };
 /**
  * Hook to create a new payment
@@ -70,19 +54,14 @@ export const useAvailablePeriods = (contractId, clientId) => {
  */
 export const useCreatePayment = () => {
   const queryClient = useQueryClient();
-  return useMutation(
-    (paymentData) => api.createPayment(paymentData),
-    {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries(queryKeys.clients.payments(data.client_id));
-        queryClient.invalidateQueries(queryKeys.clients.summary(data.client_id));
-        queryClient.invalidateQueries(queryKeys.clients.detail(data.client_id));
-      },
-      onError: (error) => {
-        console.error('Error creating payment:', error);
-      }
+  return useMutation({
+    mutationFn: (paymentData) => api.payments.create(paymentData),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.payments(data.client_id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.summary(data.client_id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(data.client_id) });
     }
-  );
+  });
 };
 /**
  * Hook to update an existing payment
@@ -90,21 +69,16 @@ export const useCreatePayment = () => {
  */
 export const useUpdatePayment = () => {
   const queryClient = useQueryClient();
-  return useMutation(
-    ({ id, data }) => api.updatePayment(id, data),
-    {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries(queryKeys.payments.detail(data.payment_id));
-        queryClient.invalidateQueries(queryKeys.clients.payments(data.client_id));
-        queryClient.invalidateQueries(queryKeys.clients.summary(data.client_id));
-        queryClient.invalidateQueries(queryKeys.clients.detail(data.client_id));
-        clearFileCache();
-      },
-      onError: (error) => {
-        console.error('Error updating payment:', error);
-      }
+  return useMutation({
+    mutationFn: ({ id, data }) => api.payments.update(id, data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.detail(data.payment_id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.payments(data.client_id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.summary(data.client_id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(data.client_id) });
+      clearFileCache();
     }
-  );
+  });
 };
 /**
  * Hook to delete a payment
@@ -112,18 +86,13 @@ export const useUpdatePayment = () => {
  */
 export const useDeletePayment = () => {
   const queryClient = useQueryClient();
-  return useMutation(
-    ({ id, clientId }) => api.deletePayment(id).then(() => ({ id, clientId })),
-    {
-      onSuccess: ({ id, clientId }) => {
-        queryClient.invalidateQueries(queryKeys.clients.payments(clientId));
-        queryClient.invalidateQueries(queryKeys.clients.summary(clientId));
-        queryClient.invalidateQueries(queryKeys.clients.detail(clientId));
-        clearFileCache();
-      },
-      onError: (error) => {
-        console.error('Error deleting payment:', error);
-      }
+  return useMutation({
+    mutationFn: ({ id, clientId }) => api.payments.delete(id).then(() => ({ id, clientId })),
+    onSuccess: ({ id, clientId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.payments(clientId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.summary(clientId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId) });
+      clearFileCache();
     }
-  );
+  });
 };

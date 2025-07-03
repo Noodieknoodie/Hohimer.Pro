@@ -8,6 +8,7 @@
     "main": "./lib/app.js",
     "dependencies": {
         "@azure/identity": "^4.10.1",
+        "@heroicons/react": "^2.0.18",
         "@tanstack/react-query": "^5.81.5",
         "@types/react": "^19.1.8",
         "@types/react-dom": "^19.1.6",
@@ -16,6 +17,7 @@
         "mssql": "^11.0.1",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
+        "react-router-dom": "^7.1.0",
         "send": "^0.18.0",
         "zustand": "^5.0.6"
     },

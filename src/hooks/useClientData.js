@@ -7,14 +7,11 @@ import { queryKeys } from '../store/queries';
  * @returns {Object} - Query result with clients data
  */
 export const useClientList = (provider = null) => {
-  return useQuery(
-    queryKeys.clients.all,
-    () => api.getClients(provider ? { provider } : undefined),
-    {
-      keepPreviousData: true,
-      staleTime: 1000 * 60 * 5, 
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.clients.all,
+    queryFn: () => api.clients.list(provider),
+    staleTime: 1000 * 60 * 5,
+  });
 };
 /**
  * Hook to fetch a single client by ID
@@ -22,17 +19,12 @@ export const useClientList = (provider = null) => {
  * @returns {Object} - Query result with client data
  */
 export const useClient = (clientId) => {
-  return useQuery(
-    queryKeys.clients.detail(clientId),
-    () => api.getClient(clientId),
-    {
-      enabled: !!clientId,
-      staleTime: 1000 * 60, 
-      onError: (error) => {
-        console.error(`Error fetching client ${clientId}:`, error);
-      },
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.clients.detail(clientId),
+    queryFn: () => api.clients.get(clientId),
+    enabled: !!clientId,
+    staleTime: 1000 * 60,
+  });
 };
 /**
  * Hook to fetch client contract
@@ -40,17 +32,12 @@ export const useClient = (clientId) => {
  * @returns {Object} - Query result with contract data
  */
 export const useClientContract = (clientId) => {
-  return useQuery(
-    queryKeys.clients.contract(clientId),
-    () => api.getClientContract(clientId),
-    {
-      enabled: !!clientId,
-      staleTime: 1000 * 60 * 10, 
-      onError: (error) => {
-        console.error(`Error fetching contract for client ${clientId}:`, error);
-      },
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.clients.contract(clientId),
+    queryFn: () => api.contracts.list(clientId),
+    enabled: !!clientId,
+    staleTime: 1000 * 60 * 10,
+  });
 };
 /**
  * Hook to fetch client dashboard data (replaces multiple API calls)
@@ -58,15 +45,10 @@ export const useClientContract = (clientId) => {
  * @returns {Object} - Query result with complete dashboard data
  */
 export const useClientDashboard = (clientId) => {
-  return useQuery(
-    queryKeys.clients.dashboard(clientId),
-    () => api.getClientDashboard(clientId),
-    {
-      enabled: !!clientId,
-      staleTime: 1000 * 60, 
-      onError: (error) => {
-        console.error(`Error fetching dashboard for client ${clientId}:`, error);
-      },
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.clients.dashboard(clientId),
+    queryFn: () => api.dashboard.get(clientId),
+    enabled: !!clientId,
+    staleTime: 1000 * 60,
+  });
 };
