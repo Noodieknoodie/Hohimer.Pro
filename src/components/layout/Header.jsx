@@ -1,33 +1,32 @@
 import React from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { Link, useLocation } from 'react-router-dom';
 
 const Header = () => {
-  const router = useRouter();
+  const location = useLocation();
   
   const navItems = [
-    { title: 'HOME', path: '/', active: router.pathname === '/' },
-    { title: 'PAYMENTS', path: '/payments', active: router.pathname === '/payments' },
-    { title: 'SUMMARY', path: '/summary', active: router.pathname === '/summary' },
-    { title: 'CONTACTS', path: '/contacts', active: router.pathname === '/contacts' },
-    { title: 'CONTRACTS', path: '/contracts', active: router.pathname === '/contracts' },
-    { title: 'EXPORT DATA', path: '/export', active: router.pathname === '/export' },
+    { title: 'HOME', path: '/', active: location.pathname === '/' },
+    { title: 'PAYMENTS', path: '/payments', active: location.pathname === '/payments' },
+    { title: 'SUMMARY', path: '/summary', active: location.pathname === '/summary' },
+    { title: 'CONTACTS', path: '/contacts', active: location.pathname === '/contacts' },
+    { title: 'CONTRACTS', path: '/contracts', active: location.pathname === '/contracts' },
+    { title: 'EXPORT DATA', path: '/export', active: location.pathname === '/export' },
   ];
   
   return (
     <header className="navbar-dark shadow-md">
       <div className="flex h-14 items-center justify-between px-6">
         <div className="flex items-center">
-          <Link href="/" className="text-xl font-semibold text-white mr-8 hover:text-primary-300 transition-colors duration-200">
+          <Link to="/" className="text-xl font-semibold text-white mr-8 hover:text-primary-300 transition-colors duration-200">
             HohimerPro
           </Link>
           <nav className="hidden md:flex space-x-1">
             {navItems.map((item) => (
               <Link 
                 key={item.path} 
-                href={item.path}
+                to={item.path}
                 className={`${
-                  router.pathname === item.path 
+                  location.pathname === item.path 
                     ? 'bg-primary-600 text-white shadow-sm' 
                     : 'text-light-300 hover:bg-dark-accent hover:text-white'
                 } rounded-md px-4 py-2 text-sm font-medium h-10 flex items-center transition-colors duration-200`}
@@ -51,9 +50,9 @@ const Header = () => {
           {navItems.map((item) => (
             <Link
               key={item.path}
-              href={item.path}
+              to={item.path}
               className={`${
-                router.pathname === item.path
+                location.pathname === item.path
                   ? 'border-b-2 border-primary-500 text-white'
                   : 'text-light-400 hover:text-white'
               } px-4 py-2 text-sm`}

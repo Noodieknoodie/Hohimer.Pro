@@ -1,12 +1,18 @@
+// vite.config.js
+
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
+import tailwindcss from "@tailwindcss/vite"; // 1. Import the plugin
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    tailwindcss(), // 2. Add the plugin to the array
+  ],
   define: {
     global: "globalThis",
   },

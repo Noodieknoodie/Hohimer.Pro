@@ -10,35 +10,54 @@ import {
   ApiError
 } from '../utils/types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:7071/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:7071';
 
-class ApiService {
-  private async request<T>(
-    endpoint: string, 
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${API_BASE}${endpoint}`;
-    const config: RequestInit = {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    };
+  class ApiService {
+    private async request<T>(
+      endpoint: string,
+      options: RequestInit = {}
+    ): Promise<T> {
+      // Always prepend /api to every endpoint
+      const url = `${API_BASE}/api${endpoint}`;
+      const config: RequestInit = {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      };
 
-    const response = await fetch(url, config);
+      try {
+        const response = await fetch(url, config);
 
-    if (!response.ok) {
-      const error = new ApiError(
-        `API request failed: ${response.statusText}`,
-        response.status,
-        await response.text()
-      );
-      throw error;
+        if (!response.ok) {
+          let errorMessage = `API request failed: ${response.statusText}`;
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            // If response isn't JSON, use default message
+          }
+
+          const error = new ApiError(errorMessage, response.status, response.statusText);
+          throw error;
+        }
+
+        // Handle 204 No Content
+        if (response.status === 204) {
+          return null as T;
+        }
+
+        return response.json();
+      } catch (error: any) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        // Network error
+        throw new ApiError('Network error: Unable to connect to API', 0, error.message);
+      }
     }
-
-    return response.json();
-  }
+  
 
   clients = {
     list: (provider?: string): Promise<Client[]> => {
@@ -53,6 +72,26 @@ class ApiService {
     search: (query: string): Promise<Client[]> => {
       return this.request<Client[]>(`/clients/search?q=${encodeURIComponent(query)}`);
     },
+
+    create: (client: any): Promise<Client> => {
+      return this.request<Client>('/clients', {
+        method: 'POST',
+        body: JSON.stringify(client),
+      });
+    },
+
+    update: (id: number, updates: any): Promise<any> => {
+      return this.request<any>(`/clients/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+    },
+
+    delete: (id: number): Promise<void> => {
+      return this.request<void>(`/clients/${id}`, {
+        method: 'DELETE',
+      });
+    },
   };
 
   contracts = {
@@ -64,13 +103,26 @@ class ApiService {
     get: (id: number): Promise<Contract> => {
       return this.request<Contract>(`/contracts/${id}`);
     },
+
+    getByClient: (clientId: number): Promise<Contract> => {
+      return this.request<Contract>(`/contracts/client/${clientId}`);
+    },
+
+    create: (contract: any): Promise<Contract> => {
+      return this.request<Contract>('/contracts', {
+        method: 'POST',
+        body: JSON.stringify(contract),
+      });
+    },
   };
 
   payments = {
-    list: (clientId?: number, year?: number): Promise<Payment[]> => {
+    list: (clientId?: number, year?: number, page: number = 1, limit: number = 10): Promise<Payment[]> => {
       const params = new URLSearchParams();
       if (clientId) params.append('client_id', clientId.toString());
       if (year) params.append('year', year.toString());
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
       const queryString = params.toString() ? `?${params.toString()}` : '';
       return this.request<Payment[]>(`/payments${queryString}`);
     },
@@ -107,9 +159,17 @@ class ApiService {
   };
 
   periods = {
-    available: (clientId: number, contractId: number): Promise<AvailablePeriod[]> => {
-      return this.request<AvailablePeriod[]>(
+    available: (clientId: number, contractId: number): Promise<{periods: AvailablePeriod[], payment_schedule: string}> => {
+      return this.request<{periods: AvailablePeriod[], payment_schedule: string}>(
         `/periods?client_id=${clientId}&contract_id=${contractId}`
+      );
+    },
+  };
+
+  calculations = {
+    variance: (actual: number, expected: number): Promise<any> => {
+      return this.request<any>(
+        `/calculations/variance?actual_fee=${actual}&expected_fee=${expected}`
       );
     },
   };

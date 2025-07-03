@@ -1,0 +1,634 @@
+api\__init__.py
+```py
+"""API endpoints for the application."""
+from . import clients, contracts, payments, files
+```
+
+api\clients.py
+```py
+from fastapi import APIRouter, HTTPException, Query
+from typing import List, Optional
+from core.database import execute_query
+from models.schemas import Client, Contract, ClientDashboard, PaymentStatusInfo, ComplianceInfo, NextPaymentDue
+from services.client_service import get_all_clients, get_client_by_id
+from services.contract_service import get_client_contract
+from services.payment_service import get_client_payments
+from repositories.calculation_repository import CalculationRepository
+from repositories.payment_repository import PaymentRepository
+
+router = APIRouter(prefix="/clients", tags=["clients"])
+
+@router.get("/", response_model=List[Client])
+async def read_clients(
+    provider: Optional[str] = Query(None, description="Filter by provider name")
+):
+    try:
+        clients = get_all_clients(provider)
+        return clients
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{client_id}", response_model=Client)
+async def read_client(client_id: int):
+    try:
+        client = get_client_by_id(client_id)
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        return client
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# @router.get("/{client_id}/summary", response_model=ClientSummary)
+# async def read_client_summary(client_id: int):
+#     try:
+#         summary = get_client_summary(client_id)
+#         if not summary:
+#             raise HTTPException(status_code=404, detail="Client not found")
+#         return summary
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{client_id}/contract", response_model=Contract)
+async def read_client_contract(client_id: int):
+    try:
+        contract = get_client_contract(client_id)
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        return contract
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{client_id}/dashboard", response_model=ClientDashboard)
+async def get_client_dashboard(client_id: int):
+    """
+    Single endpoint providing ALL calculated data for a client.
+    Frontend should call ONLY this for dashboard display.
+    """
+    try:
+        # Get client info
+        client = get_client_by_id(client_id)
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        
+        # Get contract info
+        contract = get_client_contract(client_id)
+        
+        # Get payment status using repository
+        payment_status_data = CalculationRepository.calculate_payment_status(client_id)
+        payment_status = PaymentStatusInfo(**payment_status_data)
+        
+        # Get compliance info using repository
+        compliance_status, compliance_reason = CalculationRepository.map_status_to_compliance(payment_status_data)
+        compliance_color = "red" if compliance_status == "non_compliant" else "yellow" if payment_status_data["current_status"] == "Due" else "green"
+        compliance = ComplianceInfo(
+            status=compliance_status,
+            reason=compliance_reason,
+            color=compliance_color
+        )
+        
+        # Get recent payments
+        recent_payments = get_client_payments(client_id, page=1, limit=5)
+        
+        # Calculate next payment due info
+        next_payment_due = NextPaymentDue(
+            period=payment_status_data["current_period"],
+            due_date=None,  # Could be calculated based on schedule
+            expected_fee=None  # Could be calculated if contract exists
+        )
+        
+        # If we have contract and it's percentage-based, calculate expected fee
+        if contract and contract.fee_type in ["percentage", "percent"]:
+            fee_calc = CalculationRepository.calculate_expected_fee(contract.contract_id)
+            next_payment_due.expected_fee = fee_calc.expected_fee
+        elif contract and contract.fee_type == "flat":
+            next_payment_due.expected_fee = contract.flat_rate
+        
+        return ClientDashboard(
+            client=client,
+            contract=contract,
+            payment_status=payment_status,
+            compliance=compliance,
+            recent_payments=recent_payments,
+            next_payment_due=next_payment_due
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+api\contracts.py
+```py
+from fastapi import APIRouter, HTTPException, Query
+from typing import Optional
+
+from models.schemas import Contract
+from services.contract_service import (
+    get_contract_by_id, 
+    get_client_contract
+)
+from repositories.calculation_repository import CalculationRepository
+
+router = APIRouter(prefix="/contracts", tags=["contracts"])
+
+@router.get("/{contract_id}", response_model=Contract)
+async def read_contract(contract_id: int):
+    try:
+        contract = get_contract_by_id(contract_id)
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        return contract
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/client/{client_id}", response_model=Contract)
+async def read_client_contract(client_id: int):
+    try:
+        contract = get_client_contract(client_id)
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found for this client")
+        return contract
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{contract_id}/expected-fee", response_model=Contract)
+async def calculate_fee(
+    contract_id: int,
+    total_assets: Optional[float] = Query(None, description="Total assets for percentage-based fees")
+):
+    try:
+        fee_calculation = CalculationRepository.calculate_expected_fee(contract_id, total_assets)
+        return fee_calculation
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+api\files.py
+```py
+from fastapi import APIRouter, HTTPException, Path, Query
+from typing import List, Optional, Dict, Any
+from models.schemas import File
+from services.file_service import (
+    has_files_for_payment, 
+    has_files_for_client, 
+    get_payment_files,
+    get_full_file_path,
+    validate_file_exists
+)
+
+# Create a router with the correct prefix for files
+router = APIRouter(prefix="/files", tags=["files"])
+
+@router.get("/check/payment/{payment_id}", response_model=dict)
+async def check_payment_files(payment_id: int = Path(..., ge=1)):
+    """Check if a payment has any files attached to it."""
+    try:
+        has_files = has_files_for_payment(payment_id)
+        return {"has_files": has_files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/check/client/{client_id}", response_model=dict)
+async def check_client_files(client_id: int = Path(..., ge=1)):
+    """Check if a client has any files available."""
+    try:
+        has_files = has_files_for_client(client_id)
+        return {"has_files": has_files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/payment/{payment_id}", response_model=List[File])
+async def get_files_for_payment(payment_id: int = Path(..., ge=1)):
+    """Get all files associated with a specific payment, with their full paths."""
+    try:
+        files = get_payment_files(payment_id)
+        
+        # Enhance file data with full paths for frontend display
+        for file in files:
+            if "onedrive_path" in file:
+                file_path = get_full_file_path(file["onedrive_path"])
+                file["full_path"] = file_path
+                
+                # Check if file exists
+                file_exists = validate_file_exists(file_path)
+                file["exists"] = file_exists
+                
+        return files
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+api\payments.py
+```py
+from fastapi import APIRouter, HTTPException, Query, Path
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel
+from models.schemas import Payment, PaymentCreate, AvailablePeriods, Contract
+from services.payment_service import (
+    get_client_payments, 
+    get_payment_by_id,
+    create_payment,
+    update_payment,
+    delete_payment,
+    get_available_periods
+)
+# Import file service at the top level to avoid circular imports
+from services.file_service import has_files_for_payment
+from repositories.calculation_repository import CalculationRepository
+
+# Main router for all payment-related endpoints
+router = APIRouter(tags=["payments"])
+
+# Client payment endpoints
+@router.get("/clients/{client_id}/payments", response_model=List[Payment])
+async def read_client_payments(
+    client_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    year: Optional[int] = Query(None, description="Filter by year")
+):
+    try:
+        # Convert year to int if it's a valid integer string, otherwise use None
+        filtered_year = year
+        if isinstance(year, str) and year.lower() == 'null':
+            filtered_year = None
+        payments = get_client_payments(
+            client_id=client_id, 
+            page=page, 
+            limit=limit, 
+            year=filtered_year
+        )
+        # Ensure has_files property is explicitly set in each payment
+        for payment in payments:
+            if payment.has_files is None:
+                payment.has_files = has_files_for_payment(payment.payment_id)
+        return payments
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Payment detail endpoint
+@router.get("/payments/{payment_id}", response_model=Payment)
+async def read_payment(payment_id: int = Path(..., ge=1)):
+    try:
+        payment = get_payment_by_id(payment_id)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        # Ensure has_files property is explicitly set
+        if payment.has_files is None:
+            payment.has_files = has_files_for_payment(payment.payment_id)
+        return payment
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Create payment endpoint
+@router.post("/payments", response_model=Payment)
+async def create_new_payment(payment: PaymentCreate):
+    try:
+        new_payment = create_payment(payment)
+        return new_payment
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Update payment endpoint
+@router.put("/payments/{payment_id}", response_model=Payment)
+async def update_existing_payment(
+    payment_id: int = Path(..., ge=1),
+    payment: PaymentCreate = None
+):
+    try:
+        updated_payment = update_payment(payment_id, payment)
+        if not updated_payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        return updated_payment
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Delete payment endpoint
+@router.delete("/payments/{payment_id}", status_code=204)
+async def delete_existing_payment(payment_id: int = Path(..., ge=1)):
+    try:
+        success = delete_payment(payment_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Contract periods endpoint
+@router.get("/contracts/{contract_id}/periods", response_model=AvailablePeriods)
+async def read_available_periods(
+    contract_id: int,
+    client_id: int = Query(..., description="Client ID is required"),
+):
+    try:
+        periods = get_available_periods(contract_id, client_id)
+        return periods
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Calculation endpoints for frontend business logic removal
+
+class FeeCalculationRequest(BaseModel):
+    contract_id: int
+    total_assets: Optional[float] = None
+
+class VarianceCalculation(BaseModel):
+    status: str
+    message: str
+    difference: Optional[float] = None
+    percent_difference: Optional[float] = None
+
+@router.post("/calculate-fee", response_model=Contract)
+async def calculate_fee_endpoint(request: FeeCalculationRequest):
+    """
+    Calculate expected fee for payment form.
+    Replaces frontend calculateExpectedFee() function.
+    """
+    try:
+        calculation = CalculationRepository.calculate_expected_fee(
+            request.contract_id, 
+            request.total_assets
+        )
+        return calculation
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/calculate-variance")
+async def calculate_payment_variance(
+    actual_fee: float,
+    expected_fee: float
+) -> VarianceCalculation:
+    """
+    Calculate variance between actual and expected fee.
+    Replaces frontend calculateVariance() function.
+    """
+    try:
+        if actual_fee is None or expected_fee is None:
+            return VarianceCalculation(
+                status="unknown", 
+                message="N/A"
+            )
+
+        difference = actual_fee - expected_fee
+        percent_difference = (difference / expected_fee) * 100 if expected_fee != 0 else 0
+        abs_percent_difference = abs(percent_difference)
+
+        # Format currency
+        def format_currency(value):
+            return f"${value:,.2f}"
+
+        if abs(difference) < 0.01:
+            return VarianceCalculation(
+                status="exact", 
+                message="Exact Match",
+                difference=difference,
+                percent_difference=percent_difference
+            )
+        elif abs_percent_difference <= 5:
+            return VarianceCalculation(
+                status="acceptable",
+                message=f"{format_currency(difference)} ({percent_difference:.1f}%)",
+                difference=difference,
+                percent_difference=percent_difference
+            )
+        elif abs_percent_difference <= 15:
+            return VarianceCalculation(
+                status="warning",
+                message=f"{format_currency(difference)} ({percent_difference:.1f}%)",
+                difference=difference,
+                percent_difference=percent_difference
+            )
+        else:
+            return VarianceCalculation(
+                status="alert",
+                message=f"{format_currency(difference)} ({percent_difference:.1f}%)",
+                difference=difference,
+                percent_difference=percent_difference
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+core\__init__.py
+```py
+# Package initialization
+```
+
+core\config.py
+```py
+# backend/core/config.py
+
+import os
+import sys
+from pathlib import Path
+# Use absolute import instead of relative
+from utils.user_utils import get_user_base_path, validate_db_path
+
+# Define app mode based on environment variable or auto-detection
+APP_MODE = os.environ.get("APP_MODE", "auto").lower()  # 'home', 'office', or 'auto'
+
+# Path to local database (for home mode)
+LOCAL_DB_PATH = Path(__file__).parent.parent / "data" / "401k_payments.db"
+
+# Get base path (for office mode)
+BASE_PATH = get_user_base_path()
+# Use OneDrive path with dynamic username instead of network path
+OFFICE_DB_PATH = BASE_PATH / "HohimerPro" / "database" / "401k_payments.db"
+
+
+# Determine which database to use based on mode and availability
+if APP_MODE == "home":
+    DB_PATH = LOCAL_DB_PATH
+elif APP_MODE == "office":
+    DB_PATH = OFFICE_DB_PATH
+else:  # Auto-detect based on file availability
+    if OFFICE_DB_PATH.exists():
+        print("Auto-detected OFFICE mode - using OneDrive database")
+        DB_PATH = OFFICE_DB_PATH
+        APP_MODE = "office"
+    else:
+        print("Auto-detected HOME mode - using local database")
+        DB_PATH = LOCAL_DB_PATH
+        APP_MODE = "home"
+
+DB_BACKUP_PATH = (BASE_PATH / "HohimerPro" / "database" / "db_backups" 
+                  if APP_MODE == "office" else Path(__file__).parent.parent / "data" / "backup_dbs")
+
+# Validate the database path to provide early and clear feedback
+try:
+    validate_db_path(DB_PATH)
+    print(f"Successfully connected to database at: {DB_PATH}")
+    print(f"Running in {APP_MODE.upper()} mode")
+except (FileNotFoundError, Exception) as e:
+    print(f"ERROR: {str(e)}")
+    print(f"Failed to access database at: {DB_PATH}")
+    
+    # If in auto mode and first attempt failed, try the alternative
+    if APP_MODE == "auto" and DB_PATH == OFFICE_DB_PATH:
+        print("Attempting to use local database instead...")
+        DB_PATH = LOCAL_DB_PATH
+        APP_MODE = "home"
+        try:
+            validate_db_path(DB_PATH)
+            print(f"Successfully connected to database at: {DB_PATH}")
+            print(f"Running in {APP_MODE.upper()} mode")
+        except (FileNotFoundError, Exception) as e2:
+            print(f"ERROR: {str(e2)}")
+            print("Unable to connect to either office or home database")
+    elif APP_MODE == "auto" and DB_PATH == LOCAL_DB_PATH:
+        print("Attempting to use office database instead...")
+        DB_PATH = OFFICE_DB_PATH
+        APP_MODE = "office"
+        try:
+            validate_db_path(DB_PATH)
+            print(f"Successfully connected to database at: {DB_PATH}")
+            print(f"Running in {APP_MODE.upper()} mode")
+        except (FileNotFoundError, Exception) as e2:
+            print(f"ERROR: {str(e2)}")
+            print("Unable to connect to either office or home database")
+
+PATHS = {
+    'BASE_PATH': BASE_PATH,
+    'DB_PATH': DB_PATH,
+    'DB_BACKUP_PATH': DB_BACKUP_PATH,
+    'APP_MODE': APP_MODE,
+}
+
+ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://localhost:6069",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:6069",
+    "http://10.10.1.64:6069",
+    "http://10.10.1.64:8000",
+    "http://10.10.1.185:6069",
+    "http://10.10.1.185:8000",
+    "*"  # Allow all origins - use this temporarily if specific IPs don't work
+]
+
+# Application metadata
+APP_NAME = "HohimerPro - 401K Payments"
+APP_VERSION = "1.0"
+```
+
+core\database.py
+```py
+import sqlite3
+import os
+from contextlib import contextmanager
+from typing import Dict, List, Tuple, Union, Any
+from fastapi import HTTPException
+from .config import DB_PATH
+
+def dict_factory(cursor, row):
+    return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+
+@contextmanager
+def get_db_connection():
+    try:
+        # Check if file exists before attempting connection
+        if not os.path.exists(DB_PATH):
+            error_msg = f"Database file not found at: {DB_PATH}"
+            print(f"ERROR: {error_msg}")
+            raise FileNotFoundError(error_msg)
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = dict_factory
+        try:
+            yield conn
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        error_msg = f"Database connection error: {str(e)}"
+        print(f"ERROR: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+    except Exception as e:
+        error_msg = f"Unexpected error accessing database: {str(e)}"
+        print(f"ERROR: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+@contextmanager
+def get_db_transaction():
+    """Context manager for database transactions with automatic commit/rollback."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = dict_factory
+        yield conn
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        error_msg = f"Transaction error: {str(e)}"
+        print(f"ERROR: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+    finally:
+        if conn:
+            conn.close()
+
+def execute_transaction(queries_and_params):
+    """Execute multiple queries in a single transaction."""
+    with get_db_transaction() as conn:
+        cursor = conn.cursor()
+        results = []
+        
+        for query, params in queries_and_params:
+            cursor.execute(query, params)
+            if query.strip().upper().startswith(("INSERT", "UPDATE", "DELETE")):
+                results.append({"lastrowid": cursor.lastrowid, "rowcount": cursor.rowcount})
+            else:
+                results.append(cursor.fetchall())
+                
+        return results
+
+def execute_query(
+    query: str, 
+    params: Union[Tuple, Dict, List] = None, 
+    fetch_one: bool = False
+) -> List[Dict[str, Any]]:
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            if query.strip().upper().startswith(("INSERT", "UPDATE", "DELETE")):
+                conn.commit()
+                return {"lastrowid": cursor.lastrowid, "rowcount": cursor.rowcount}
+            if fetch_one:
+                return cursor.fetchone()
+            return cursor.fetchall()
+    except HTTPException:
+        # Re-raise HTTP exceptions from get_db_connection
+        raise
+    except sqlite3.Error as e:
+        error_msg = f"Database query error: {str(e)}\nQuery: {query}"
+        print(f"ERROR: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    except Exception as e:
+        error_msg = f"Unexpected error executing query: {str(e)}\nQuery: {query}"
+        print(f"ERROR: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+```

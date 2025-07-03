@@ -2,7 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
-/* Theme Configuration (converted from old tailwind.config.js) */
+/* Theme Configuration (All tokens consolidated for Tailwind v4) */
 @theme {
   /* Primary Colors */
   --color-primary-50: #f5f3ff;
@@ -55,28 +55,25 @@
   --shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.04), 0 12px 24px rgba(0, 0, 0, 0.08);
   --shadow-form: 0 8px 30px rgba(0, 0, 0, 0.06);
   --shadow-none: none;
-}
 
-/* CSS Variables from old globals.css */
-:root {
   /* Typography */
   --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
   /* Font sizes */
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
 
   /* Line heights */
-  --leading-none: 1;
-  --leading-tight: 1.25;
-  --leading-snug: 1.375;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.625;
+  --line-height-none: 1;
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
 
   /* Letter spacing */
   --tracking-tight: -0.025em;
@@ -85,7 +82,7 @@
   --tracking-wider: 0.05em;
 }
 
-/* Global styles from old globals.css */
+/* Global styles */
 html,
 body {
   padding: 0;
@@ -93,10 +90,10 @@ body {
   font-family: var(--font-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: var(--text-base);
-  line-height: var(--leading-normal);
-  color: theme(colors.dark.500);
-  background-color: theme(colors.light.bg);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  color: var(--color-dark-500);
+  background-color: var(--color-light-bg);
 }
 
 * {
@@ -111,23 +108,23 @@ h4,
 h5,
 h6 {
   font-weight: 600;
-  line-height: var(--leading-tight);
+  line-height: var(--line-height-tight);
   margin-top: 0;
-  color: theme(colors.dark.700);
+  color: var(--color-dark-700);
 }
 
 h1 {
-  font-size: var(--text-2xl);
+  font-size: var(--font-size-2xl);
   font-weight: 700;
 }
 
 h2 {
-  font-size: var(--text-xl);
+  font-size: var(--font-size-xl);
   font-weight: 600;
 }
 
 h3 {
-  font-size: var(--text-lg);
+  font-size: var(--font-size-lg);
   font-weight: 600;
 }
 
@@ -138,41 +135,41 @@ p {
 
 /* Table Typography & Styling */
 table {
-  font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
   overflow: hidden;
   border-radius: 0.5rem;
-  box-shadow: theme(boxShadow.DEFAULT);
-  background-color: theme(colors.light.100);
+  box-shadow: var(--shadow-DEFAULT);
+  background-color: var(--color-light-100);
 }
 
 thead {
-  background-color: theme(colors.light.300);
+  background-color: var(--color-light-300);
 }
 
 th {
-  font-size: var(--text-xs);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--tracking-wider);
-  color: theme(colors.dark.500);
+  color: var(--color-dark-500);
   padding: 1rem;
   text-align: left;
-  border-bottom: 1px solid theme(colors.light.400);
+  border-bottom: 1px solid var(--color-light-400);
 }
 
 td {
-  font-size: var(--text-sm);
-  line-height: var(--leading-snug);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
   padding: 1rem;
-  border-bottom: 1px solid theme(colors.light.300);
+  border-bottom: 1px solid var(--color-light-300);
   transition: background-color 0.2s ease;
 }
 
 tr:hover td {
-  background-color: theme(colors.primary.50);
+  background-color: var(--color-primary-50);
 }
 
 tr:last-child td {
@@ -181,9 +178,9 @@ tr:last-child td {
 
 /* Form Typography */
 label {
-  font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  color: theme(colors.dark.500);
+  color: var(--color-dark-500);
   margin-bottom: 0.25rem;
   display: block;
 }
@@ -192,11 +189,11 @@ input,
 select,
 textarea {
   font-family: var(--font-primary);
-  font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   padding: 0.625rem 0.75rem;
-  border: 1px solid theme(colors.light.500);
+  border: 1px solid var(--color-light-500);
   border-radius: 0.375rem;
-  background-color: theme(colors.light.100);
+  background-color: var(--color-light-100);
   transition: all 0.2s ease;
   width: 100%;
 }
@@ -205,57 +202,57 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: theme(colors.primary.500);
+  border-color: var(--color-primary-500);
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
 }
 
 button {
   font-family: var(--font-primary);
   font-weight: 500;
-  font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
 }
 
 /* Links */
 a {
-  color: theme(colors.primary.600);
+  color: var(--color-primary-600);
   text-decoration: none;
   transition: color 0.2s ease-in-out;
 }
 
 a:hover {
-  color: theme(colors.primary.700);
+  color: var(--color-primary-700);
 }
 
 /* Card Styling */
 .card {
   border-radius: 0.5rem;
-  background-color: theme(colors.light.card);
-  box-shadow: theme(boxShadow.card);
+  background-color: var(--color-light-card);
+  box-shadow: var(--shadow-card);
   transition: box-shadow 0.3s ease, transform 0.3s ease;
   overflow: hidden;
 }
 
 .card:hover {
-  box-shadow: theme(boxShadow.hover);
+  box-shadow: var(--shadow-hover);
 }
 
 /* Form Styling */
 .form-container {
-  background-color: theme(colors.light.card);
+  background-color: var(--color-light-card);
   border-radius: 0.5rem;
-  box-shadow: theme(boxShadow.form);
-  border-left: 3px solid theme(colors.primary.600);
+  box-shadow: var(--shadow-form);
+  border-left: 3px solid var(--color-primary-600);
 }
 
 /* Dark UI Elements */
 .navbar-dark {
-  background-color: theme(colors.dark.bg);
-  color: theme(colors.light.300);
+  background-color: var(--color-dark-bg);
+  color: var(--color-light-300);
 }
 
 .sidebar-dark {
-  background-color: theme(colors.dark.card);
-  color: theme(colors.light.300);
+  background-color: var(--color-dark-card);
+  color: var(--color-light-300);
 }
 
 /* Animation classes */
@@ -308,21 +305,21 @@ a:hover {
 }
 
 ::-webkit-scrollbar-track {
-  background: theme(colors.light.300);
+  background: var(--color-light-300);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: theme(colors.light.500);
+  background: var(--color-light-500);
   border-radius: 4px;
   transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: theme(colors.dark.400);
+  background: var(--color-dark-400);
 }
 
-/* Form focus effect from old index.css */
+/* Form focus effect */
 .form-focus {
   position: relative;
   z-index: 50;

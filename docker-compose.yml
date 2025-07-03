@@ -1,12 +1,16 @@
-version: "3.8"
+version: '3.8'
+
 services:
   api:
-    build: ./api
+    image: mcr.microsoft.com/azure-functions/python:4-python3.11
     ports:
       - "7071:80"
     environment:
       - AzureWebJobsStorage=UseDevelopmentStorage=true
       - FUNCTIONS_WORKER_RUNTIME=python
-      - WEBSITE_HOSTNAME=localhost:7071
+      - AZURE_FUNCTIONS_ENVIRONMENT=Development
+      - CORS_ORIGINS=http://localhost:53000,http://localhost:5173
     volumes:
       - ./api:/home/site/wwwroot
+    working_dir: /home/site/wwwroot
+    command: /azure-functions-host/Microsoft.Azure.WebJobs.Script.WebHost

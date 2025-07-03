@@ -34,7 +34,7 @@ export const useClient = (clientId) => {
 export const useClientContract = (clientId) => {
   return useQuery({
     queryKey: queryKeys.clients.contract(clientId),
-    queryFn: () => api.contracts.list(clientId),
+    queryFn: () => api.contracts.getByClient(clientId),
     enabled: !!clientId,
     staleTime: 1000 * 60 * 10,
   });

@@ -1,0 +1,1141 @@
+services\__init__.py
+```py
+
+```
+
+services\client_metrics_service.py
+```py
+from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+from core.database import execute_query, execute_transaction
+from utils.constants import PAYMENT_SCHEDULES
+
+def update_client_metrics(client_id: int) -> bool:
+    """
+    Update metrics for a specific client after payment changes.
+    Handles all metric calculations with proper null handling.
+    
+    Args:
+        client_id: The client ID to update metrics for
+        
+    Returns:
+        bool: Success status
+    """
+    try:
+        # Get latest payment info
+        payment_query = """
+            SELECT 
+                received_date, actual_fee, 
+                applied_start_quarter, applied_start_quarter_year,
+                total_assets
+            FROM payments
+            WHERE client_id = :client_id AND valid_to IS NULL
+            ORDER BY received_date DESC
+            LIMIT 1
+        """
+        latest_payment = execute_query(payment_query, {"client_id": client_id}, fetch_one=True)
+        
+        # Get YTD payments sum
+        current_year = datetime.now().year
+        ytd_query = """
+            SELECT SUM(actual_fee) as ytd_total
+            FROM payments
+            WHERE client_id = :client_id 
+              AND valid_to IS NULL
+              AND (
+                  (applied_start_quarter_year = :year) OR
+                  (applied_start_month_year = :year)
+              )
+        """
+        ytd_result = execute_query(ytd_query, {"client_id": client_id, "year": current_year}, fetch_one=True)
+        
+        # Get average quarterly payment
+        avg_query = """
+            SELECT AVG(actual_fee) as avg_payment
+            FROM payments
+            WHERE client_id = :client_id AND valid_to IS NULL
+        """
+        avg_result = execute_query(avg_query, {"client_id": client_id}, fetch_one=True)
+        
+        # Get payment schedule for next payment calculation
+        schedule_query = """
+            SELECT payment_schedule
+            FROM contracts
+            WHERE client_id = :client_id AND valid_to IS NULL
+        """
+        schedule_result = execute_query(schedule_query, {"client_id": client_id}, fetch_one=True)
+        
+        # Calculate next payment due date
+        next_payment_due = None
+        if latest_payment and schedule_result and "received_date" in latest_payment:
+            # Convert received_date string to datetime
+            try:
+                last_date = datetime.strptime(latest_payment["received_date"], "%Y-%m-%d")
+                
+                if schedule_result.get("payment_schedule", "").lower() == PAYMENT_SCHEDULES["MONTHLY"]:
+                    # Monthly: add one month
+                    next_date = last_date.replace(month=last_date.month % 12 + 1)
+                    if last_date.month == 12:
+                        next_date = next_date.replace(year=last_date.year + 1)
+                    next_payment_due = next_date.strftime("%Y-%m-%d")
+                else:
+                    # Quarterly: add three months
+                    if last_date.month > 9:  # Oct-Dec
+                        next_date = last_date.replace(year=last_date.year + 1, month=(last_date.month + 3) % 12)
+                    else:
+                        next_date = last_date.replace(month=last_date.month + 3)
+                    next_payment_due = next_date.strftime("%Y-%m-%d")
+            except (ValueError, TypeError):
+                pass  # Skip if date parsing fails
+        
+        # Build update data dictionary with null handling
+        update_data = {
+            "client_id": client_id,
+            "last_payment_date": latest_payment["received_date"] if latest_payment and "received_date" in latest_payment else None,
+            "last_payment_amount": latest_payment["actual_fee"] if latest_payment and "actual_fee" in latest_payment else None,
+            "last_payment_quarter": latest_payment["applied_start_quarter"] if latest_payment and "applied_start_quarter" in latest_payment else None,
+            "last_payment_year": latest_payment["applied_start_quarter_year"] if latest_payment and "applied_start_quarter_year" in latest_payment else None,
+            "total_ytd_payments": ytd_result["ytd_total"] if ytd_result and "ytd_total" in ytd_result else 0,
+            "avg_quarterly_payment": avg_result["avg_payment"] if avg_result and "avg_payment" in avg_result else None,
+            "last_recorded_assets": latest_payment["total_assets"] if latest_payment and "total_assets" in latest_payment else None,
+            "last_updated": datetime.now().strftime("%Y-%m-%d"),
+            "next_payment_due": next_payment_due
+        }
+        
+        # Perform upsert operation
+        upsert_query = """
+            INSERT INTO client_metrics (
+                client_id, last_payment_date, last_payment_amount, 
+                last_payment_quarter, last_payment_year, total_ytd_payments, 
+                avg_quarterly_payment, last_recorded_assets, last_updated, 
+                next_payment_due
+            ) VALUES (
+                :client_id, :last_payment_date, :last_payment_amount,
+                :last_payment_quarter, :last_payment_year, :total_ytd_payments,
+                :avg_quarterly_payment, :last_recorded_assets, :last_updated,
+                :next_payment_due
+            )
+            ON CONFLICT(client_id) DO UPDATE SET
+                last_payment_date = :last_payment_date,
+                last_payment_amount = :last_payment_amount,
+                last_payment_quarter = :last_payment_quarter,
+                last_payment_year = :last_payment_year,
+                total_ytd_payments = :total_ytd_payments,
+                avg_quarterly_payment = :avg_quarterly_payment,
+                last_recorded_assets = :last_recorded_assets,
+                last_updated = :last_updated,
+                next_payment_due = :next_payment_due
+        """
+        
+        execute_query(upsert_query, update_data)
+        return True
+    except Exception as e:
+        print(f"Error updating client metrics for client {client_id}: {str(e)}")
+        return False
+```
+
+services\client_service.py
+```py
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+from core.database import execute_query
+from models.schemas import Client
+from repositories.calculation_repository import CalculationRepository
+from utils.constants import MONTH_NAMES
+
+# SQL query constants
+GET_ALL_CLIENTS_QUERY = """
+    SELECT c.client_id, c.display_name, c.full_name, c.ima_signed_date, c.onedrive_folder_path,
+           co.provider_name
+    FROM clients c
+    LEFT JOIN (
+        SELECT client_id, provider_name
+        FROM contracts 
+        WHERE valid_to IS NULL
+        GROUP BY client_id
+    ) co ON c.client_id = co.client_id
+    WHERE c.valid_to IS NULL
+"""
+
+def get_all_clients(provider: Optional[str] = None) -> List[Client]:
+    query = GET_ALL_CLIENTS_QUERY
+    params = {}
+    if provider:
+        query += " AND co.provider_name = :provider"
+        params["provider"] = provider
+    query += " ORDER BY c.display_name"
+    clients_data = execute_query(query, params)
+    clients = []
+    for client_data in clients_data:
+        client = Client(**client_data)
+        # Get payment status using repository
+        payment_status = CalculationRepository.calculate_payment_status(client_data["client_id"])
+        # Map payment status to compliance status for backward compatibility
+        compliance_status, compliance_reason = CalculationRepository.map_status_to_compliance(payment_status)
+        if compliance_status == "non_compliant":
+            client.compliance_status = "red"
+        elif payment_status["current_status"] == "Due":
+            client.compliance_status = "yellow"
+        else:
+            client.compliance_status = "green"
+        client.compliance_reason = compliance_reason
+        clients.append(client)
+    return clients
+
+def get_client_by_id(client_id: int) -> Optional[Client]:
+    query = """
+        SELECT c.client_id, c.display_name, c.full_name, c.ima_signed_date, c.onedrive_folder_path,
+               co.provider_name, co.payment_schedule, co.fee_type
+        FROM clients c
+        LEFT JOIN contracts co ON c.client_id = co.client_id AND co.valid_to IS NULL
+        WHERE c.client_id = :client_id AND c.valid_to IS NULL
+    """
+    client_data = execute_query(query, {"client_id": client_id}, fetch_one=True)
+    if not client_data:
+        return None
+    client = Client(**client_data)
+    # Get payment status using repository
+    payment_status = CalculationRepository.calculate_payment_status(client_id)
+    # Map payment status to compliance status for backward compatibility
+    compliance_status, compliance_reason = CalculationRepository.map_status_to_compliance(payment_status)
+    if compliance_status == "non_compliant":
+        client.compliance_status = "red"
+    elif payment_status["current_status"] == "Due":
+        client.compliance_status = "yellow"
+    else:
+        client.compliance_status = "green"
+    client.compliance_reason = compliance_reason
+    return client
+
+```
+
+services\contract_service.py
+```py
+from typing import Dict, Any, Optional
+from models.schemas import Contract
+from core.database import execute_query
+
+def get_contract_by_id(contract_id: int) -> Optional[Contract]:
+    query = """
+        SELECT contract_id, client_id, contract_number, provider_name, 
+               contract_start_date, fee_type, percent_rate, flat_rate,
+               payment_schedule, num_people, notes
+        FROM contracts
+        WHERE contract_id = :contract_id AND valid_to IS NULL
+    """
+    
+    contract_data = execute_query(query, {"contract_id": contract_id}, fetch_one=True)
+    
+    if not contract_data:
+        return None
+        
+    return Contract(**contract_data)
+
+def get_client_contract(client_id: int) -> Optional[Contract]:
+    query = """
+        SELECT contract_id, client_id, contract_number, provider_name, 
+               contract_start_date, fee_type, percent_rate, flat_rate,
+               payment_schedule, num_people, notes
+        FROM contracts
+        WHERE client_id = :client_id AND valid_to IS NULL
+    """
+    
+    contract_data = execute_query(query, {"client_id": client_id}, fetch_one=True)
+    
+    if not contract_data:
+        return None
+        
+    return Contract(**contract_data)
+
+```
+
+services\file_service.py
+```py
+from typing import List, Dict, Any, Optional
+import os
+from pathlib import Path
+from core.database import execute_query
+from models.schemas import File
+from utils.user_utils import get_user_base_path
+
+def has_files_for_payment(payment_id: int) -> bool:
+    """Check if a payment has any files attached to it."""
+    query = """
+        SELECT has_file
+        FROM payment_file_view
+        WHERE payment_id = :payment_id
+        LIMIT 1
+    """
+    result = execute_query(query, {"payment_id": payment_id}, fetch_one=True)
+    return result and result.get("has_file", 0) == 1
+
+def get_payment_files(payment_id: int) -> List[Dict[str, Any]]:
+    """Get full file details for a specific payment."""
+    query = """
+        SELECT 
+            file_id, 
+            client_id, 
+            file_name, 
+            onedrive_path,
+            payment_id
+        FROM payment_file_view
+        WHERE payment_id = :payment_id
+        AND has_file = 1
+    """
+    files = execute_query(query, {"payment_id": payment_id})
+    
+    # Enhance file data with full paths
+    for file in files:
+        if "onedrive_path" in file:
+            file["full_path"] = get_full_file_path(file["onedrive_path"])
+            
+    return files
+
+def get_full_file_path(onedrive_path: str) -> str:
+    """
+    Construct the full file path from the relative path stored in the database.
+    This prepends the user's base path + the 401Ks/Current Plans folder to 
+    create the complete path to the file on the local filesystem.
+    """
+    base_path = get_user_base_path()
+    full_path = base_path / "401Ks" / "Current Plans" / onedrive_path
+    
+    # Normalize the path to ensure it works correctly with the PDF viewer
+    normalized_path = os.path.normpath(str(full_path))
+    return normalized_path
+
+def has_files_for_client(client_id: int) -> bool:
+    """Check if a client has any files available."""
+    query = """
+        SELECT COUNT(*) as file_count
+        FROM client_files
+        WHERE client_id = :client_id
+    """
+    result = execute_query(query, {"client_id": client_id}, fetch_one=True)
+    return result and result.get("file_count", 0) > 0
+
+def get_payment_file_ids(payment_id: int) -> List[int]:
+    """Get file IDs for a specific payment."""
+    query = """
+        SELECT file_id
+        FROM payment_files
+        WHERE payment_id = :payment_id
+    """
+    results = execute_query(query, {"payment_id": payment_id})
+    return [result["file_id"] for result in results]
+
+def validate_file_exists(file_path: str) -> bool:
+    """
+    Check if a file exists at the given path.
+    """
+    return os.path.isfile(file_path)
+```
+
+services\payment_service.py
+```py
+from typing import List, Dict, Any, Optional, Tuple
+from datetime import datetime
+from core.database import execute_query, execute_transaction
+from models.schemas import Payment, PaymentCreate, AvailablePeriods
+from services.client_metrics_service import update_client_metrics               
+from services.contract_service import get_contract_by_id
+from services.period_service import get_available_periods as get_periods_from_service
+from repositories.calculation_repository import CalculationRepository
+from repositories.payment_repository import PaymentRepository
+from utils.constants import MONTH_NAMES
+
+def get_client_payments(
+    client_id: int,
+    page: int = 1,
+    limit: int = 10,
+    year: Optional[int] = None
+) -> List[Payment]:
+    offset = (page - 1) * limit
+    params = {"client_id": client_id, "limit": limit, "offset": offset}
+    query = """
+        SELECT 
+            p.payment_id, p.contract_id, p.client_id, p.received_date, 
+            p.total_assets, p.expected_fee, p.actual_fee, p.method, p.notes,
+            p.applied_start_month, p.applied_start_month_year, 
+            p.applied_end_month, p.applied_end_month_year,
+            p.applied_start_quarter, p.applied_start_quarter_year, 
+            p.applied_end_quarter, p.applied_end_quarter_year,
+            c.display_name as client_name, co.provider_name, co.fee_type, 
+            co.percent_rate, co.flat_rate, co.payment_schedule,
+            COALESCE(pv.has_file, 0) as has_file
+        FROM payments p
+        JOIN clients c ON p.client_id = c.client_id
+        LEFT JOIN contracts co ON p.contract_id = co.contract_id
+        LEFT JOIN (
+            SELECT DISTINCT payment_id, has_file 
+            FROM payment_file_view
+        ) pv ON p.payment_id = pv.payment_id
+        WHERE p.client_id = :client_id AND p.valid_to IS NULL
+    """
+    if year:
+        query += """ 
+            AND (
+                (p.applied_start_month_year = :year) OR 
+                (p.applied_end_month_year = :year) OR
+                (p.applied_start_quarter_year = :year) OR 
+                (p.applied_end_quarter_year = :year)
+            )
+        """
+        params["year"] = year
+    query += " ORDER BY p.received_date DESC LIMIT :limit OFFSET :offset"
+    payment_data = execute_query(query, params)
+    enhanced_payments = []
+    for payment in payment_data:
+        payment_with_details = enhance_payment_with_details(payment)
+        enhanced_payments.append(payment_with_details)
+    return enhanced_payments
+
+def get_payment_by_id(payment_id: int) -> Optional[Payment]:
+    query = """
+        SELECT 
+            p.payment_id, p.contract_id, p.client_id, p.received_date, 
+            p.total_assets, p.expected_fee, p.actual_fee, p.method, p.notes,
+            p.applied_start_month, p.applied_start_month_year, 
+            p.applied_end_month, p.applied_end_month_year,
+            p.applied_start_quarter, p.applied_start_quarter_year, 
+            p.applied_end_quarter, p.applied_end_quarter_year,
+            c.display_name as client_name, co.provider_name, co.fee_type, 
+            co.percent_rate, co.flat_rate, co.payment_schedule,
+            COALESCE(pv.has_file, 0) as has_file
+        FROM payments p
+        JOIN clients c ON p.client_id = c.client_id
+        LEFT JOIN contracts co ON p.contract_id = co.contract_id
+        LEFT JOIN (
+            SELECT DISTINCT payment_id, has_file 
+            FROM payment_file_view
+        ) pv ON p.payment_id = pv.payment_id
+        WHERE p.payment_id = :payment_id AND p.valid_to IS NULL
+    """
+    payment_data = execute_query(query, {"payment_id": payment_id}, fetch_one=True)
+    if not payment_data:
+        return None
+    return enhance_payment_with_details(payment_data)
+
+def create_payment(payment: PaymentCreate) -> Payment:
+    contract = get_contract_by_id(payment.contract_id)
+    is_monthly = contract.payment_schedule.lower() == "monthly"
+    query = """
+        INSERT INTO payments (
+            contract_id, client_id, received_date, total_assets,
+            actual_fee, method, notes
+    """
+    if is_monthly:
+        query += """,
+            applied_start_month, applied_start_month_year,
+            applied_end_month, applied_end_month_year
+        """
+    else:
+        query += """,
+            applied_start_quarter, applied_start_quarter_year,
+            applied_end_quarter, applied_end_quarter_year
+        """
+    query += ") VALUES ("
+    query += ":contract_id, :client_id, :received_date, :total_assets, "
+    query += ":actual_fee, :method, :notes"
+    if is_monthly:
+        query += """,
+            :applied_start_month, :applied_start_month_year,
+            :applied_end_month, :applied_end_month_year
+        """
+    else:
+        query += """,
+            :applied_start_quarter, :applied_start_quarter_year,
+            :applied_end_quarter, :applied_end_quarter_year
+        """
+    query += ")"
+    params = payment.dict(exclude_unset=True)
+    
+    result = execute_query(query, params)
+    payment_id = result["lastrowid"]
+    
+    created_payment = get_payment_by_id(payment_id)
+    
+    # Update client metrics after creating a payment
+    update_client_metrics(payment.client_id)
+    
+    return Payment(**created_payment.model_dump())
+
+def update_payment(payment_id: int, payment: PaymentCreate) -> Optional[Payment]:
+    existing = get_payment_by_id(payment_id)
+    if not existing:
+        return None
+    contract = get_contract_by_id(payment.contract_id)
+    is_monthly = contract.payment_schedule.lower() == "monthly"
+    query = """
+        UPDATE payments
+        SET contract_id = :contract_id,
+            client_id = :client_id,
+            received_date = :received_date,
+            total_assets = :total_assets,
+            actual_fee = :actual_fee,
+            method = :method,
+            notes = :notes
+    """
+    if is_monthly:
+        query += """,
+            applied_start_month = :applied_start_month,
+            applied_start_month_year = :applied_start_month_year,
+            applied_end_month = :applied_end_month,
+            applied_end_month_year = :applied_end_month_year,
+            applied_start_quarter = NULL,
+            applied_start_quarter_year = NULL,
+            applied_end_quarter = NULL,
+            applied_end_quarter_year = NULL
+        """
+    else:
+        query += """,
+            applied_start_month = NULL,
+            applied_start_month_year = NULL,
+            applied_end_month = NULL,
+            applied_end_month_year = NULL,
+            applied_start_quarter = :applied_start_quarter,
+            applied_start_quarter_year = :applied_start_quarter_year,
+            applied_end_quarter = :applied_end_quarter,
+            applied_end_quarter_year = :applied_end_quarter_year
+        """
+    query += " WHERE payment_id = :payment_id"
+    params = payment.dict(exclude_unset=True)
+    params["payment_id"] = payment_id
+    
+    execute_query(query, params)
+    
+    updated_payment = get_payment_by_id(payment_id)
+    
+    # Update client metrics after updating a payment
+    update_client_metrics(payment.client_id)
+    
+    return Payment(**updated_payment.model_dump())
+
+def delete_payment(payment_id: int) -> bool:
+    payment = get_payment_by_id(payment_id)
+    if not payment:
+        return False
+    
+    # Store client_id before deletion
+    client_id = payment.client_id
+    
+    query = """
+        UPDATE payments
+        SET valid_to = CURRENT_TIMESTAMP
+        WHERE payment_id = :payment_id
+    """
+    
+    result = execute_query(query, {"payment_id": payment_id})
+    
+    # Update client metrics after soft-deleting a payment
+    if result["rowcount"] > 0:
+        update_client_metrics(client_id)
+    
+    return result["rowcount"] > 0
+
+
+def check_split_payment_status(payment: Dict[str, Any]) -> Tuple[bool, Optional[List[Dict[str, Any]]]]:
+    """Determine if payment covers multiple periods and calculate period breakdown."""
+    is_split_monthly = (
+        payment.get("applied_start_month") is not None and
+        payment.get("applied_end_month") is not None and
+        (
+            payment.get("applied_start_month") != payment.get("applied_end_month") or
+            payment.get("applied_start_month_year") != payment.get("applied_end_month_year")
+        )
+    )
+    
+    is_split_quarterly = (
+        payment.get("applied_start_quarter") is not None and
+        payment.get("applied_end_quarter") is not None and
+        (
+            payment.get("applied_start_quarter") != payment.get("applied_end_quarter") or
+            payment.get("applied_start_quarter_year") != payment.get("applied_end_quarter_year")
+        )
+    )
+    
+    is_split = is_split_monthly or is_split_quarterly
+    
+    periods = None
+    if is_split:
+        periods = calculate_periods(payment)
+        
+    return is_split, periods
+
+def calculate_payment_variance(payment: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate variance between expected and actual fee."""
+    # If actual fee is missing, we can't calculate variance
+    if payment.get("actual_fee") is None:
+        return {
+            "difference": None,
+            "percent_difference": None,
+            "status": "unknown",
+            "message": "Cannot calculate"
+        }
+        
+    # Get expected fee
+    expected_fee = payment.get("expected_fee")
+    if expected_fee is None:
+        expected_fee = CalculationRepository.calculate_expected_fee_from_payment(payment)
+        
+    if expected_fee is None:
+        return {
+            "difference": None,
+            "percent_difference": None,
+            "status": "unknown",
+            "message": "Cannot calculate"
+        }
+        
+    actual_fee = payment.get("actual_fee")
+    difference = actual_fee - expected_fee
+    percent_difference = (difference / expected_fee) * 100 if expected_fee != 0 else 0
+    abs_percent_difference = abs(percent_difference)
+    
+    if actual_fee == expected_fee:
+        status = "exact"
+        message = "Exact Match"
+    elif abs_percent_difference <= 5:
+        status = "acceptable"
+        message = f"${difference:.2f} ({percent_difference:.2f}%) ✓"
+    elif abs_percent_difference <= 15:
+        status = "warning"
+        message = f"${difference:.2f} ({percent_difference:.2f}%)"
+    else:
+        status = "alert"
+        message = f"${difference:.2f} ({percent_difference:.2f}%)"
+        
+    return {
+        "difference": difference,
+        "percent_difference": percent_difference,
+        "status": status,
+        "message": message
+    }
+
+def enhance_payment_with_details(payment_data: Dict[str, Any]) -> Payment:
+    payment = Payment(**payment_data)
+    
+    # Calculate expected fee if needed
+    if payment.expected_fee is None:
+        payment.expected_fee = CalculationRepository.calculate_expected_fee_from_payment(payment_data)
+    
+    # Set has_files from the query result
+    payment.has_files = payment_data.get('has_file') == 1
+    
+    # Check if payment is split across periods
+    is_split, periods = check_split_payment_status(payment_data)
+    payment.is_split_payment = is_split
+    payment.periods = periods
+    
+    # Calculate variance
+    payment.variance = calculate_payment_variance(payment_data)
+    
+    return payment
+
+def calculate_periods(payment: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Calculate the individual periods covered by a split payment."""
+    periods = []
+    actual_fee = payment.get("actual_fee") or 0
+    
+    if payment.get("applied_start_quarter") is not None:
+        # Handle quarterly periods
+        start_quarter = payment.get("applied_start_quarter")
+        start_year = payment.get("applied_start_quarter_year")
+        end_quarter = payment.get("applied_end_quarter")
+        end_year = payment.get("applied_end_quarter_year")
+        
+        # Calculate total number of quarters
+        total_quarters = (end_year - start_year) * 4 + (end_quarter - start_quarter) + 1
+        amount_per_quarter = actual_fee / total_quarters if total_quarters > 0 else 0
+        
+        # Current quarter/year
+        quarter = start_quarter
+        year = start_year
+        
+        # Generate period for each quarter
+        for _ in range(total_quarters):
+            periods.append({
+                "period": f"Q{quarter} {year}",
+                "amount": amount_per_quarter
+            })
+            
+            # Move to next quarter
+            quarter += 1
+            if quarter > 4:
+                quarter = 1
+                year += 1
+    
+    elif payment.get("applied_start_month") is not None:
+        # Handle monthly periods
+        start_month = payment.get("applied_start_month")
+        start_year = payment.get("applied_start_month_year")
+        end_month = payment.get("applied_end_month")
+        end_year = payment.get("applied_end_month_year")
+        
+        # Calculate total number of months
+        total_months = (end_year - start_year) * 12 + (end_month - start_month) + 1
+        amount_per_month = actual_fee / total_months if total_months > 0 else 0
+        
+        # Current month/year
+        month = start_month
+        year = start_year
+        
+        # Generate period for each month
+        for _ in range(total_months):
+            month_name = MONTH_NAMES[month - 1]
+            periods.append({
+                "period": f"{month_name} {year}",
+                "amount": amount_per_month
+            })
+            
+            # Move to next month
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+    
+    return periods
+
+def get_available_periods(contract_id: int, client_id: int) -> AvailablePeriods:
+    """Get available periods for payment selection based on payment history.
+    
+    Returns periods from one period prior to current date down to the first payment date.
+    This supports the arrears payment logic where payments are always for the previous period.
+    
+    Now uses Period objects internally for reliable period arithmetic and comparisons.
+    """
+    periods_data = get_periods_from_service(contract_id, client_id)
+    return AvailablePeriods(periods=periods_data["periods"])
+```
+
+services\period_service.py
+```py
+"""
+Period service to centralize all period-related logic.
+Replaces the 140+ lines of string manipulation in payment_service.py with Period objects.
+"""
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+from core.database import execute_query
+from models.period import Period
+
+
+def get_available_periods(contract_id: int, client_id: int) -> Dict[str, List[Dict[str, str]]]:
+    """
+    Get available periods for payment selection based on payment history.
+    
+    Returns periods from one period prior to current date down to the first payment date.
+    This supports the arrears payment logic where payments are always for the previous period.
+    
+    Now uses Period objects internally for reliable period arithmetic and comparisons.
+    """
+    # Get contract details
+    contract_query = """
+        SELECT contract_id, payment_schedule
+        FROM contracts
+        WHERE contract_id = :contract_id 
+        AND client_id = :client_id
+        AND valid_to IS NULL
+    """
+    contract_data = execute_query(
+        contract_query, 
+        {"contract_id": contract_id, "client_id": client_id}, 
+        fetch_one=True
+    )
+    if not contract_data:
+        return {"periods": []}
+    
+    is_monthly = contract_data["payment_schedule"].lower() == "monthly"
+    
+    # Get the earliest payment period for this client
+    first_payment_period = get_first_payment_period(client_id, is_monthly)
+    
+    # Calculate the end period (one period prior to current for arrears)
+    end_period = Period.get_previous_period_for_schedule(contract_data["payment_schedule"])
+    
+    # Determine start period
+    if first_payment_period:
+        start_period = first_payment_period
+    else:
+        # Default to beginning of current year if no payments
+        current_year = datetime.now().year
+        if is_monthly:
+            start_period = Period(current_year, 1, is_monthly=True)
+        else:
+            start_period = Period(current_year, 1, is_monthly=False)
+    
+    # Generate period range
+    try:
+        periods_list = Period.generate_range(start_period, end_period)
+    except ValueError:
+        # If start is after end, just return the end period
+        periods_list = [end_period]
+    
+    # Convert to API format (most recent first)
+    periods = []
+    for period in reversed(periods_list):
+        periods.append({
+            "label": period.to_display_string(),
+            "value": period.to_string()
+        })
+    
+    return {"periods": periods}
+
+
+def get_first_payment_period(client_id: int, is_monthly: bool) -> Optional[Period]:
+    """
+    Get the earliest payment period for a client.
+    
+    Args:
+        client_id: The client ID
+        is_monthly: True for monthly payments, False for quarterly
+        
+    Returns:
+        Period object representing the first payment period, or None if no payments
+    """
+    if is_monthly:
+        query = """
+            SELECT applied_start_month as first_month,
+                   applied_start_month_year as first_month_year
+            FROM payments
+            WHERE client_id = :client_id
+            AND valid_to IS NULL
+            AND applied_start_month IS NOT NULL
+            ORDER BY applied_start_month_year, applied_start_month
+            LIMIT 1
+        """
+    else:
+        query = """
+            SELECT applied_start_quarter as first_quarter,
+                   applied_start_quarter_year as first_quarter_year
+            FROM payments
+            WHERE client_id = :client_id
+            AND valid_to IS NULL
+            AND applied_start_quarter IS NOT NULL
+            ORDER BY applied_start_quarter_year, applied_start_quarter
+            LIMIT 1
+        """
+    
+    result = execute_query(query, {"client_id": client_id}, fetch_one=True)
+    
+    if not result:
+        return None
+    
+    if is_monthly:
+        return Period(result["first_month_year"], result["first_month"], is_monthly=True)
+    else:
+        return Period(result["first_quarter_year"], result["first_quarter"], is_monthly=False)
+
+
+def get_current_period(is_monthly: bool = True) -> Period:
+    """
+    Get the current period based on today's date.
+    
+    Args:
+        is_monthly: True for monthly period, False for quarterly
+        
+    Returns:
+        Period object representing the current period
+    """
+    return Period.get_current_period(is_monthly)
+
+
+def get_previous_period(is_monthly: bool = True) -> Period:
+    """
+    Get the previous period (for arrears payment logic).
+    
+    Args:
+        is_monthly: True for monthly period, False for quarterly
+        
+    Returns:
+        Period object representing the previous period
+    """
+    current = get_current_period(is_monthly)
+    return current.get_previous_period()
+
+
+def get_next_period(period: Period) -> Period:
+    """
+    Get the period immediately after the given period.
+    
+    Args:
+        period: The period to get the next period for
+        
+    Returns:
+        The next period
+    """
+    return period.get_next_period()
+
+
+def calculate_period_range(start_period: Period, end_period: Period) -> List[Period]:
+    """
+    Generate a list of periods from start to end (inclusive).
+    
+    Args:
+        start_period: The starting period
+        end_period: The ending period
+        
+    Returns:
+        List of Period objects from start to end
+        
+    Raises:
+        ValueError: If periods are incompatible or start > end
+    """
+    return Period.generate_range(start_period, end_period)
+
+
+def parse_period_string(period_str: str, is_quarterly: bool = False) -> Period:
+    """
+    Parse a period string into a Period object.
+    
+    Args:
+        period_str: String like "3-2024" or "Q1-2024"
+        is_quarterly: True if the period should be parsed as quarterly
+        
+    Returns:
+        Period object
+        
+    Raises:
+        ValueError: If the period string is invalid
+    """
+    if is_quarterly:
+        return Period.from_quarterly_string(period_str)
+    else:
+        return Period.from_string(period_str)
+
+
+def periods_between(start: Period, end: Period) -> int:
+    """
+    Calculate the number of periods between two periods.
+    
+    Args:
+        start: The starting period
+        end: The ending period
+        
+    Returns:
+        Number of periods (positive if end is after start, negative if before)
+        
+    Raises:
+        ValueError: If periods are incompatible types
+    """
+    return start.periods_between(end)
+
+
+def format_period_for_display(period: Period) -> str:
+    """
+    Format a period for human-readable display.
+    
+    Args:
+        period: The period to format
+        
+    Returns:
+        Human-readable string like "March 2024" or "Q1 2024"
+    """
+    return period.to_display_string()
+
+
+def format_period_for_api(period: Period) -> str:
+    """
+    Format a period for API responses (backward compatibility).
+    
+    Args:
+        period: The period to format
+        
+    Returns:
+        API-compatible string like "3-2024"
+    """
+    return period.to_string()
+
+
+def is_period_in_past(period: Period) -> bool:
+    """
+    Check if a period is in the past relative to the current period.
+    
+    Args:
+        period: The period to check
+        
+    Returns:
+        True if the period is in the past
+    """
+    current = Period.get_current_period(period.is_monthly)
+    return period < current
+
+
+def get_payment_period_from_payment_data(payment_data: Dict[str, Any]) -> Optional[Period]:
+    """
+    Extract the payment period from payment database row data.
+    
+    Args:
+        payment_data: Dictionary containing payment data from database
+        
+    Returns:
+        Period object representing the applied period, or None if invalid
+    """
+    # Check for quarterly period first
+    if (payment_data.get("applied_start_quarter") is not None and 
+        payment_data.get("applied_start_quarter_year") is not None):
+        
+        quarter = payment_data["applied_start_quarter"]
+        year = payment_data["applied_start_quarter_year"]
+        return Period(year, quarter, is_monthly=False)
+    
+    # Check for monthly period
+    elif (payment_data.get("applied_start_month") is not None and 
+          payment_data.get("applied_start_month_year") is not None):
+        
+        month = payment_data["applied_start_month"]
+        year = payment_data["applied_start_month_year"]
+        return Period(year, month, is_monthly=True)
+    
+    return None
+
+
+def convert_period_to_payment_fields(period: Period) -> Dict[str, Any]:
+    """
+    Convert a Period object to database fields for payment storage.
+    
+    Args:
+        period: The period to convert
+        
+    Returns:
+        Dictionary with database field names and values
+    """
+    if period.is_monthly:
+        return {
+            "applied_start_month": period.value,
+            "applied_start_month_year": period.year,
+            "applied_end_month": period.value,
+            "applied_end_month_year": period.year,
+            "applied_start_quarter": None,
+            "applied_start_quarter_year": None,
+            "applied_end_quarter": None,
+            "applied_end_quarter_year": None
+        }
+    else:
+        return {
+            "applied_start_month": None,
+            "applied_start_month_year": None,
+            "applied_end_month": None,
+            "applied_end_month_year": None,
+            "applied_start_quarter": period.value,
+            "applied_start_quarter_year": period.year,
+            "applied_end_quarter": period.value,
+            "applied_end_quarter_year": period.year
+        }
+
+
+def convert_period_range_to_payment_fields(start_period: Period, end_period: Period) -> Dict[str, Any]:
+    """
+    Convert a period range to database fields for split payment storage.
+    
+    Args:
+        start_period: The starting period
+        end_period: The ending period
+        
+    Returns:
+        Dictionary with database field names and values
+        
+    Raises:
+        ValueError: If periods are incompatible types or start > end
+    """
+    if start_period.is_monthly != end_period.is_monthly:
+        raise ValueError("Start and end periods must be the same type")
+    
+    if start_period > end_period:
+        raise ValueError("Start period must be before or equal to end period")
+    
+    if start_period.is_monthly:
+        return {
+            "applied_start_month": start_period.value,
+            "applied_start_month_year": start_period.year,
+            "applied_end_month": end_period.value,
+            "applied_end_month_year": end_period.year,
+            "applied_start_quarter": None,
+            "applied_start_quarter_year": None,
+            "applied_end_quarter": None,
+            "applied_end_quarter_year": None
+        }
+    else:
+        return {
+            "applied_start_month": None,
+            "applied_start_month_year": None,
+            "applied_end_month": None,
+            "applied_end_month_year": None,
+            "applied_start_quarter": start_period.value,
+            "applied_start_quarter_year": start_period.year,
+            "applied_end_quarter": end_period.value,
+            "applied_end_quarter_year": end_period.year
+        }
+```
+
+utils\__init__.py
+```py
+"""Utils package for the application.""" 
+```
+
+utils\constants.py
+```py
+"""Constants used throughout the application."""
+
+# Month names used in multiple services
+MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+]
+
+# Payment methods used in the payment form
+PAYMENT_METHODS = [
+    "Auto - ACH", 
+    "Auto - Check", 
+    "Invoice - Check", 
+    "Wire Transfer", 
+    "Check"
+]
+
+# Payment statuses
+PAYMENT_STATUS = {
+    "PAID": "Paid",
+    "DUE": "Due",
+    "OVERDUE": "Overdue"
+}
+
+# Fee types
+FEE_TYPES = {
+    "FLAT": "flat",
+    "PERCENTAGE": "percentage",
+    "PERCENT": "percent"
+}
+
+# Payment schedules
+PAYMENT_SCHEDULES = {
+    "MONTHLY": "monthly",
+    "QUARTERLY": "quarterly"
+}
+```
+
+utils\user_utils.py
+```py
+# user_utils.py
+import os
+import sqlite3
+from pathlib import Path
+
+_USERNAME = os.getlogin()
+
+def get_user_base_path():
+    # Updated path to match the actual location without the "401Ks/Current Plans/" part
+    base_path = Path(f"C:/Users/{_USERNAME}/Hohimer Wealth Management/Hohimer Company Portal - Hohimer Team Shared 4-15-19")
+    return base_path
+
+def validate_db_path(db_path):
+    """Validate that the database file exists and is accessible."""
+    if not db_path.exists():
+        raise FileNotFoundError(f"Database file not found at: {db_path}")
+    
+    # Try to open the database to confirm it's a valid SQLite file
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.close()
+        return True
+    except sqlite3.Error as e:
+        raise sqlite3.Error(f"Error accessing database at {db_path}: {str(e)}")
+```

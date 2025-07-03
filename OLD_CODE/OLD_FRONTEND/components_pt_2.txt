@@ -1,0 +1,1758 @@
+ClientDashboard.jsx
+```jsx
+import React from 'react';
+import ContractCard from './ContractCard';
+import PaymentInfoCard from './PaymentInfoCard';
+import ComplianceCard from './ComplianceCard';
+import ErrorDisplay from '../ui/ErrorDisplay';
+import { useClient, useClientContract, useClientDashboard } from '../../hooks/useClientData';
+import { usePaymentHistory } from '../../hooks/usePaymentData';
+import useStore from '../../store';
+
+const ClientDashboard = ({ clientId }) => {
+  const { documentViewerOpen } = useStore();
+
+  // Fetch dashboard data (replaces multiple API calls)
+  const {
+    data: dashboardData,
+    isLoading: isDashboardLoading,
+    error: dashboardError,
+  } = useClientDashboard(clientId);
+
+  // Keep individual hooks for components that still need them
+  const {
+    data: client,
+    isLoading: isClientLoading,
+    error: clientError,
+  } = useClient(clientId);
+
+  const {
+    data: contract,
+    isLoading: isContractLoading,
+    error: contractError,
+  } = useClientContract(clientId);
+
+  // Fetch latest payments for metrics calculation
+  const {
+    data: payments = [],
+    isLoading: isPaymentsLoading,
+    error: paymentsError,
+  } = usePaymentHistory(clientId, { page: 1, limit: 5 });
+
+  const isLoading = isClientLoading || isContractLoading || isPaymentsLoading || isDashboardLoading;
+  const error = clientError || contractError || paymentsError || dashboardError;
+
+  if (error) {
+    return (
+      <ErrorDisplay 
+        title="Error loading client information"
+        error={error}
+      />
+    );
+  }
+
+  // Determine layout based on document viewer state
+  const cardLayoutClass = documentViewerOpen
+    ? "grid grid-cols-1 lg:grid-cols-2 gap-6"
+    : "grid grid-cols-1 md:grid-cols-3 gap-6";
+
+  return (
+    <div className="space-y-6">
+      <div className={cardLayoutClass}>
+        <ContractCard
+          contract={contract}
+          isLoading={isLoading}
+        />
+        <PaymentInfoCard
+          client={client}
+          contract={contract}
+          payments={payments}
+          isLoading={isLoading}
+        />
+        <ComplianceCard
+          dashboardData={dashboardData}
+          isLoading={isDashboardLoading}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default ClientDashboard;
+```
+
+ComplianceCard.jsx
+```jsx
+import React from 'react';
+import Card from '../ui/Card';
+import { formatCurrency, generateFeeReferences } from '../../lib/formatUtils';
+
+const ComplianceCard = ({ dashboardData, isLoading }) => {
+  if (isLoading) {
+    return (
+      <Card variant="default" elevation="default">
+        <div className="pb-2">
+          <h3 className="text-base font-semibold text-dark-700 border-b border-light-300 pb-2">Payment Status</h3>
+        </div>
+        <div className="animate-pulse flex flex-col md:flex-row gap-4 mt-3">
+          <div className="flex-1">
+            <div className="h-10 bg-gray-200 rounded w-2/3 mb-4"></div>
+            <div className="space-y-3">
+              <div className="h-4 bg-gray-200 rounded"></div>
+              <div className="h-4 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  // Use data from dashboard API instead of local calculations
+  const overduePeriods = dashboardData?.payment_status?.overdue_periods || [];
+  const hasOverduePeriods = overduePeriods.length > 0;
+  const currentStatus = dashboardData?.payment_status?.current_status || 'Due';
+  const currentPeriod = dashboardData?.payment_status?.current_period || 'N/A';
+  const contract = dashboardData?.contract;
+  const client = dashboardData?.client;
+
+  // Payment status background color
+  const getStatusBgColor = () => {
+    if (hasOverduePeriods || currentStatus === 'Overdue') return 'bg-red-50 border-red-200 text-red-700';
+    if (currentStatus === 'Due') return 'bg-yellow-50 border-yellow-200 text-yellow-700';
+    if (currentStatus === 'Current') return 'bg-green-50 border-green-200 text-green-700';
+    return 'bg-green-50 border-green-200 text-green-700'; // Default to green
+  };
+
+  // Payment status text
+  const getStatusText = () => {
+    if (hasOverduePeriods) return 'Payment Overdue';
+    if (currentStatus === 'Due') return 'Payment Due';
+    if (currentStatus === 'Current') return 'Up to Date';
+    return currentStatus; // Use whatever the backend provides
+  };
+
+  // Get last recorded AUM for fee reference calculations
+  const lastRecordedAUM = dashboardData?.recent_payments?.find(p => p.total_assets)?.total_assets || null;
+  const feeReferences = contract ? generateFeeReferences(contract, lastRecordedAUM) : null;
+
+  return (
+    <Card variant="default" elevation="default">
+      <div className="pb-2">
+        <h3 className="text-base font-semibold text-dark-700 border-b border-light-300 pb-2">Payment Status</h3>
+      </div>
+      <div className="flex flex-col gap-4 mt-4">
+        {/* Payment Status Indicator */}
+        <div className="flex-1">
+          <div className={`rounded border p-3 ${getStatusBgColor()}`}>
+            <div className="flex items-center gap-2">
+              <StatusIcon status={hasOverduePeriods || currentStatus === 'Overdue' ? "red" : (currentStatus === 'Due' ? "yellow" : "green")} />
+              <span className="font-medium">{getStatusText()}</span>
+            </div>
+            {/* Current Period Status */}
+            <div className="mt-2 text-sm">
+              <span className="font-medium">Current Period:</span> {currentPeriod}
+              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white bg-opacity-50">
+                {currentStatus}
+              </span>
+            </div>
+          </div>
+
+          {/* Overdue Periods */}
+          {hasOverduePeriods && (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium text-dark-600 mb-2">Missing Previous Period</h4>
+              <div className="flex flex-wrap gap-2">
+                {overduePeriods.map((period, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 bg-red-100 text-red-800 rounded-md text-xs font-medium"
+                  >
+                    {period}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Contract info */}
+          {contract && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <div className="text-dark-500">
+                <span className="font-medium">Schedule:</span> {contract.payment_schedule === 'monthly' ? 'Monthly' : 'Quarterly'}
+              </div>
+              <div className="text-dark-500">
+                <span className="font-medium">Fee Type:</span> {contract.fee_type === 'flat' ? 'Flat' : 'Percentage'}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Fee Reference */}
+        {feeReferences && (
+          <div className="mt-2 border-t border-light-300 pt-3">
+            <h4 className="text-sm font-medium text-dark-600 mb-2">Fee Reference</h4>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-light-200 p-2 rounded text-center">
+                <div className="text-xs text-dark-500">Monthly</div>
+                <div className="font-medium text-dark-700">{feeReferences.monthly}</div>
+              </div>
+              <div className="bg-light-200 p-2 rounded text-center">
+                <div className="text-xs text-dark-500">Quarterly</div>
+                <div className="font-medium text-dark-700">{feeReferences.quarterly}</div>
+              </div>
+              <div className="bg-light-200 p-2 rounded text-center">
+                <div className="text-xs text-dark-500">Annual</div>
+                <div className="font-medium text-dark-700">{feeReferences.annual}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+};
+
+// Status Icon Component
+const StatusIcon = ({ status }) => {
+  if (status === 'green') {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>
+    );
+  }
+  if (status === 'yellow') {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+    );
+  }
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="8" x2="12" y2="12"></line>
+      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+    </svg>
+  );
+};
+
+export default ComplianceCard;
+```
+
+ContractCard.jsx
+```jsx
+import React from 'react';
+import Card from '../ui/Card';
+import { formatCurrency } from '../../lib/formatUtils';
+
+const ContractCard = ({ contract, isLoading }) => {
+  if (isLoading) {
+    return (
+      <Card 
+        variant="default"
+        elevation="default"
+      >
+        <div className="pb-2">
+          <h3 className="text-base font-semibold text-dark-700 border-b border-light-300 pb-2">Contract Details</h3>
+        </div>
+        <div className="animate-pulse mt-3">
+          <div className="grid grid-cols-1 gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex justify-between py-1">
+                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  
+  if (!contract) {
+    return (
+      <Card 
+        variant="default"
+        elevation="default"
+      >
+        <div className="pb-2">
+          <h3 className="text-base font-semibold text-dark-700 border-b border-light-300 pb-2">Contract Details</h3>
+        </div>
+        <div className="py-6 text-center text-gray-500">
+          No contract information available
+        </div>
+      </Card>
+    );
+  }
+  
+  const details = [
+    {
+      label: 'Contract Number',
+      value: contract.contract_number || 'N/A',
+    },
+    {
+      label: 'Plan Provider',
+      value: contract.provider_name,
+    },
+    {
+      label: 'Payment Frequency',
+      value: contract.payment_schedule === 'monthly' ? 'Monthly' : 'Quarterly',
+    },
+    {
+      label: 'Fee Structure',
+      value: contract.fee_type === 'flat' ? 'Flat Rate' : 'Percentage of AUM',
+    },
+    {
+      label: 'Fee Amount',
+      value:
+        contract.fee_type === 'flat'
+          ? formatCurrency(contract.flat_rate)
+          : `${(contract.percent_rate * 100).toFixed(3)}%`,
+    },
+  ];
+  
+  return (
+    <Card variant="default" elevation="default">
+      <div className="pb-2">
+        <h3 className="text-base font-semibold text-dark-700 border-b border-light-300 pb-2">Contract Details</h3>
+      </div>
+      <dl className="grid grid-cols-1 gap-2 text-sm mt-4">
+        {details.map((item, idx) => (
+          <div key={idx} className="flex justify-between py-1.5 px-2 -mx-2 rounded hover:bg-light-100 transition-colors">
+            <dt className="text-dark-500">{item.label}</dt>
+            <dd className="font-medium text-dark-700">{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+};
+
+export default ContractCard;
+```
+
+PaymentForm.jsx
+```jsx
+import React, { useState } from 'react';
+import Card from '../ui/Card';
+import LoadingSpinner from '../ui/LoadingSpinner';
+import EmptyState from '../ui/EmptyState';
+import { useClientContract } from '../../hooks/useClientData';
+import { useAvailablePeriods } from '../../hooks/usePaymentData';
+import PaymentFormFields from './PaymentFormFields';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import FormActions from './PaymentForm/FormActions';
+import { usePaymentFormState } from './PaymentForm/usePaymentFormState';
+import { usePaymentFormValidation } from './PaymentForm/usePaymentFormValidation';
+import { usePaymentFormSubmit } from './PaymentForm/usePaymentFormSubmit';
+const PaymentForm = ({ clientId, editingPayment, onEditingPaymentChange }) => {
+  const { data: contract, isLoading: isContractLoading } = useClientContract(clientId);
+  const { data: periodsData, isLoading: isPeriodsLoading } = useAvailablePeriods(
+    contract?.contract_id,
+    clientId,
+    { enabled: !!contract?.contract_id && !!clientId }
+  );
+
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [isFormDirty, setIsFormDirty] = useState(false);
+
+  // Custom hooks for form management
+  const {
+    formValues,
+    resetForm,
+    handleInputChange,
+    handleSplitToggle
+  } = usePaymentFormState(clientId, contract, periodsData, editingPayment, setIsFormDirty);
+
+  const {
+    formErrors,
+    setFormErrors,
+    validateForm,
+    clearFieldError,
+    clearAllErrors
+  } = usePaymentFormValidation();
+
+  const {
+    handleSubmit,
+    isSubmitting,
+    submitError
+  } = usePaymentFormSubmit(clientId, contract, editingPayment, () => {
+    resetForm();
+    clearAllErrors();
+  });
+
+  // Enhanced input change handler with error clearing
+  const handleInputChangeWithValidation = (field, value) => {
+    handleInputChange(field, value);
+    clearFieldError(field);
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    handleSubmit(formValues, setFormErrors, validateForm);
+  };
+
+  const handleReset = () => {
+    if (isFormDirty) {
+      setShowConfirmDialog(true);
+    } else {
+      resetForm();
+      clearAllErrors();
+    }
+  };
+
+  const clearEditingPayment = () => {
+    if (onEditingPaymentChange) {
+      onEditingPaymentChange(null);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (isFormDirty) {
+      setShowConfirmDialog(true);
+    } else {
+      clearEditingPayment();
+    }
+  };
+
+  const handleConfirmReset = () => {
+    resetForm();
+    clearAllErrors();
+    setShowConfirmDialog(false);
+    if (editingPayment) {
+      clearEditingPayment();
+    }
+  };
+
+  const isDisabled = !clientId || !contract;
+
+  return (
+    <div className={`animate-fade-in relative ${editingPayment ? 'form-focus' : ''}`}>
+      <Card className="p-4 mb-4 relative z-10" elevation={editingPayment ? "raised" : "default"}>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-semibold text-dark-700 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-500 mr-2">
+              <rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            {editingPayment ? 'Edit Payment' : 'Record New Payment'}
+          </h2>
+
+          {editingPayment && (
+            <button
+              onClick={handleCancelEdit}
+              className="text-sm text-dark-500 hover:text-dark-700 flex items-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              Cancel Edit
+            </button>
+          )}
+        </div>
+
+        {isContractLoading ? (
+          <div className="flex justify-center py-6">
+            <LoadingSpinner />
+          </div>
+        ) : !contract ? (
+          <EmptyState 
+            title="Select a client"
+            message="Please select a client to add payment details"
+            className="py-6"
+          />
+        ) : (
+          <>
+            <ConfirmDialog
+              isOpen={showConfirmDialog}
+              title="Unsaved Changes"
+              message="You have unsaved changes. Are you sure you want to clear the form?"
+              confirmText="Clear Form"
+              cancelText="Cancel"
+              confirmVariant="danger"
+              onConfirm={handleConfirmReset}
+              onCancel={() => setShowConfirmDialog(false)}
+            />
+
+            <form onSubmit={handleFormSubmit} className="space-y-4">
+              <PaymentFormFields
+                formValues={formValues}
+                handleInputChange={handleInputChangeWithValidation}
+                handleSplitToggle={handleSplitToggle}
+                periodOptions={periodsData}
+                isDisabled={isDisabled}
+                isPeriodsLoading={isPeriodsLoading}
+                contract={contract}
+                formErrors={formErrors}
+              />
+
+              <FormActions
+                editingPayment={editingPayment}
+                isSubmitting={isSubmitting}
+                submitError={submitError}
+                onReset={handleReset}
+                onSubmit={handleFormSubmit}
+              />
+            </form>
+          </>
+        )}
+      </Card>
+
+      {editingPayment && (
+        <div className="fixed inset-0 bg-dark-800 bg-opacity-30 z-0" />
+      )}
+    </div>
+  );
+};
+
+export default PaymentForm;
+```
+
+PaymentForm\FormActions.jsx
+```jsx
+import React from 'react';
+import Button from '../../ui/Button';
+import ErrorDisplay from '../../ui/ErrorDisplay';
+
+const FormActions = ({ 
+  editingPayment, 
+  isSubmitting, 
+  submitError,
+  onReset, 
+  onSubmit 
+}) => {
+  return (
+    <>
+      {submitError && (
+        <ErrorDisplay 
+          title="Submission Error"
+          error={submitError}
+        />
+      )}
+
+      <div className="flex justify-end gap-3 mt-3">
+        <Button
+          variant="secondary"
+          type="button"
+          onClick={onReset}
+          disabled={isSubmitting}
+        >
+          {editingPayment ? 'Cancel' : 'Clear Form'}
+        </Button>
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={isSubmitting}
+          onClick={onSubmit}
+        >
+          {isSubmitting ? 'Submitting...' : editingPayment ? 'Update Payment' : 'Record Payment'}
+        </Button>
+      </div>
+    </>
+  );
+};
+
+export default FormActions;
+```
+
+PaymentForm\usePaymentFormState.js
+```js
+import { useState, useEffect } from 'react';
+
+export const usePaymentFormState = (clientId, contract, periodsData, editingPayment, setIsFormDirty) => {
+  // Initial form state
+  const defaultFormValues = {
+    received_date: new Date().toISOString().split('T')[0],
+    total_assets: '',
+    actual_fee: '',
+    method: '',
+    notes: '',
+    is_split_payment: false,
+    start_period: '',
+    end_period: '',
+  };
+
+  const [formValues, setFormValues] = useState(defaultFormValues);
+  const [initialFormState, setInitialFormState] = useState(defaultFormValues);
+
+  // Reset form when client changes or when editing payment changes
+  useEffect(() => {
+    if (clientId && !editingPayment) {
+      resetForm();
+    }
+  }, [clientId]);
+
+  // Find default period (previous month/quarter)
+  const findDefaultPeriod = () => {
+    if (!periodsData?.periods?.length || !contract?.payment_schedule) {
+      return '';
+    }
+
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1; // 1-indexed
+    const currentYear = today.getFullYear();
+
+    if (contract.payment_schedule === 'monthly') {
+      // Default to previous month
+      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      const periodValue = `${prevMonth}-${prevYear}`;
+
+      const foundPeriod = periodsData.periods.find(p => p.value === periodValue);
+      return foundPeriod ? foundPeriod.value : periodsData.periods[0].value;
+    } else {
+      // Default to previous quarter
+      const currentQuarter = Math.ceil(currentMonth / 3);
+      const prevQuarter = currentQuarter === 1 ? 4 : currentQuarter - 1;
+      const prevYear = currentQuarter === 1 ? currentYear - 1 : currentYear;
+      const periodValue = `${prevQuarter}-${prevYear}`;
+
+      const foundPeriod = periodsData.periods.find(p => p.value === periodValue);
+      return foundPeriod ? foundPeriod.value : periodsData.periods[0].value;
+    }
+  };
+
+  // Set default period when periods data is loaded
+  useEffect(() => {
+    if (periodsData?.periods?.length && !formValues.start_period && !editingPayment) {
+      const defaultPeriod = findDefaultPeriod();
+      if (defaultPeriod) {
+        setFormValues(prev => ({
+          ...prev,
+          start_period: defaultPeriod
+        }));
+      }
+    }
+  }, [periodsData, editingPayment, contract]);
+
+  // Populate form when editing a payment
+  useEffect(() => {
+    if (editingPayment) {
+      const isMonthlyPayment = editingPayment.applied_start_month !== null;
+
+      const formattedValues = {
+        received_date: editingPayment.received_date,
+        total_assets: editingPayment.total_assets?.toString() || '',
+        actual_fee: editingPayment.actual_fee?.toString() || '',
+        method: editingPayment.method || '',
+        notes: editingPayment.notes || '',
+        is_split_payment: editingPayment.is_split_payment || false,
+        start_period: isMonthlyPayment
+          ? `${editingPayment.applied_start_month}-${editingPayment.applied_start_month_year}`
+          : `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`,
+        end_period: editingPayment.is_split_payment
+          ? (isMonthlyPayment
+            ? `${editingPayment.applied_end_month}-${editingPayment.applied_end_month_year}`
+            : `${editingPayment.applied_end_quarter}-${editingPayment.applied_end_quarter_year}`)
+          : '',
+      };
+
+      setFormValues(formattedValues);
+      setInitialFormState({ ...formattedValues });
+      setIsFormDirty && setIsFormDirty(false);
+    }
+  }, [editingPayment, setIsFormDirty]);
+
+  // Check if form is dirty on any input change
+  useEffect(() => {
+    const isDirty = JSON.stringify(formValues) !== JSON.stringify(initialFormState);
+    setIsFormDirty && setIsFormDirty(isDirty);
+  }, [formValues, initialFormState, setIsFormDirty]);
+
+  const resetForm = () => {
+    setFormValues({ ...defaultFormValues });
+    setInitialFormState({ ...defaultFormValues });
+    setIsFormDirty && setIsFormDirty(false);
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormValues((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSplitToggle = () => {
+    setFormValues(prev => ({
+      ...prev,
+      is_split_payment: !prev.is_split_payment,
+      end_period: !prev.is_split_payment ? prev.start_period : ''
+    }));
+  };
+
+  return {
+    formValues,
+    setFormValues,
+    initialFormState,
+    setInitialFormState,
+    resetForm,
+    handleInputChange,
+    handleSplitToggle
+  };
+};
+```
+
+PaymentForm\usePaymentFormSubmit.js
+```js
+import { useCreatePayment, useUpdatePayment } from '../../../hooks/usePaymentData';
+
+export const usePaymentFormSubmit = (clientId, contract, editingPayment, resetForm) => {
+  const createPaymentMutation = useCreatePayment();
+  const updatePaymentMutation = useUpdatePayment();
+
+  const handleSubmit = (formValues, setFormErrors, validateForm) => {
+    const errors = validateForm(formValues);
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    // Prepare payment data from form values
+    const paymentData = {
+      contract_id: contract.contract_id,
+      client_id: clientId,
+      received_date: formValues.received_date,
+      total_assets: formValues.total_assets ? parseFloat(formValues.total_assets) : null,
+      actual_fee: parseFloat(formValues.actual_fee),
+      method: formValues.method || null,
+      notes: formValues.notes || null,
+    };
+
+    // Parse period values
+    const isMonthly = contract.payment_schedule === 'monthly';
+    const startPeriodParts = formValues.start_period.split('-');
+
+    if (isMonthly) {
+      // Set monthly fields
+      paymentData.applied_start_month = parseInt(startPeriodParts[0], 10);
+      paymentData.applied_start_month_year = parseInt(startPeriodParts[1], 10);
+
+      if (formValues.is_split_payment && formValues.end_period) {
+        const endPeriodParts = formValues.end_period.split('-');
+        paymentData.applied_end_month = parseInt(endPeriodParts[0], 10);
+        paymentData.applied_end_month_year = parseInt(endPeriodParts[1], 10);
+      } else {
+        // Single month payment
+        paymentData.applied_end_month = paymentData.applied_start_month;
+        paymentData.applied_end_month_year = paymentData.applied_start_month_year;
+      }
+    } else {
+      // Set quarterly fields
+      paymentData.applied_start_quarter = parseInt(startPeriodParts[0], 10);
+      paymentData.applied_start_quarter_year = parseInt(startPeriodParts[1], 10);
+
+      if (formValues.is_split_payment && formValues.end_period) {
+        const endPeriodParts = formValues.end_period.split('-');
+        paymentData.applied_end_quarter = parseInt(endPeriodParts[0], 10);
+        paymentData.applied_end_quarter_year = parseInt(endPeriodParts[1], 10);
+      } else {
+        // Single quarter payment
+        paymentData.applied_end_quarter = paymentData.applied_start_quarter;
+        paymentData.applied_end_quarter_year = paymentData.applied_start_quarter_year;
+      }
+    }
+
+    // Update or create payment
+    if (editingPayment) {
+      updatePaymentMutation.mutate(
+        { id: editingPayment.payment_id, data: paymentData },
+        {
+          onSuccess: () => {
+            resetForm();
+          },
+        }
+      );
+    } else {
+      createPaymentMutation.mutate(paymentData, {
+        onSuccess: () => {
+          resetForm();
+        },
+      });
+    }
+  };
+
+  return {
+    handleSubmit,
+    createPaymentMutation,
+    updatePaymentMutation,
+    isSubmitting: createPaymentMutation.isLoading || updatePaymentMutation.isLoading,
+    submitError: createPaymentMutation.error || updatePaymentMutation.error
+  };
+};
+```
+
+PaymentForm\usePaymentFormValidation.js
+```js
+import { useState } from 'react';
+
+export const usePaymentFormValidation = () => {
+  const [formErrors, setFormErrors] = useState({});
+
+  const validateForm = (formValues) => {
+    const errors = {};
+
+    if (!formValues.received_date) {
+      errors.received_date = 'Received date is required';
+    }
+
+    if (!formValues.actual_fee) {
+      errors.actual_fee = 'Payment amount is required';
+    } else if (isNaN(parseFloat(formValues.actual_fee))) {
+      errors.actual_fee = 'Payment amount must be a number';
+    }
+
+    if (!formValues.start_period) {
+      errors.start_period = 'Applied period is required';
+    }
+
+    if (formValues.is_split_payment && !formValues.end_period) {
+      errors.end_period = 'End period is required for split payments';
+    }
+
+    return errors;
+  };
+
+  const clearFieldError = (field) => {
+    if (formErrors[field]) {
+      setFormErrors((prev) => ({
+        ...prev,
+        [field]: null,
+      }));
+    }
+  };
+
+  const clearAllErrors = () => {
+    setFormErrors({});
+  };
+
+  return {
+    formErrors,
+    setFormErrors,
+    validateForm,
+    clearFieldError,
+    clearAllErrors
+  };
+};
+```
+
+PaymentFormFields.jsx
+```jsx
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import DatePicker from '../ui/DatePicker';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
+import { PAYMENT_METHODS } from '../../lib/constants';
+import { formatCurrency } from '../../lib/formatUtils';
+import { formatDate } from '../../lib/dateUtils';
+import SplitPaymentControls from './SplitPaymentControls';
+import api from '../../lib/api';
+
+/**
+ * Form fields for payment entry/editing
+ */
+const PaymentFormFields = ({
+  formValues,
+  handleInputChange,
+  handleSplitToggle,
+  periodOptions,
+  isDisabled,
+  isPeriodsLoading,
+  contract,
+  formErrors
+}) => {
+  // Format period options from the raw data
+  const formattedPeriodOptions = periodOptions?.periods?.map(period => ({
+    label: period.label,
+    value: period.value
+  })) || [];
+
+  // Use API for expected fee calculation instead of local logic
+  const { data: feeCalculation } = useQuery(
+    ['expected-fee', contract?.contract_id, formValues.total_assets],
+    () => api.calculateFee(contract.contract_id, parseFloat(formValues.total_assets)),
+    {
+      enabled: !!contract?.contract_id && !!formValues.total_assets && !isNaN(parseFloat(formValues.total_assets)),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+
+  const expectedFee = feeCalculation?.expected_fee || null;
+
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <DatePicker
+          label="Received Date"
+          value={formValues.received_date}
+          onChange={(value) => handleInputChange('received_date', value)}
+          required
+          disabled={isDisabled}
+          error={formErrors.received_date}
+        />
+
+        <SplitPaymentControls
+          isSplitPayment={formValues.is_split_payment}
+          startPeriod={formValues.start_period}
+          endPeriod={formValues.end_period}
+          periodOptions={formattedPeriodOptions}
+          handleSplitToggle={handleSplitToggle}
+          handlePeriodChange={handleInputChange}
+          isDisabled={isDisabled || isPeriodsLoading}
+          errors={formErrors}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <Input
+          label="Assets Under Management"
+          type="text"
+          value={formValues.total_assets}
+          onChange={(value) => handleInputChange('total_assets', value)}
+          placeholder="Enter AUM (optional)"
+          prefix="$"
+          disabled={isDisabled}
+        />
+
+        <Input
+          label="Payment Amount"
+          type="text"
+          value={formValues.actual_fee}
+          onChange={(value) => handleInputChange('actual_fee', value)}
+          placeholder="Enter payment amount"
+          prefix="$"
+          required
+          disabled={isDisabled}
+          error={formErrors.actual_fee}
+        />
+
+        <Select
+          label="Payment Method"
+          options={PAYMENT_METHODS}
+          value={formValues.method}
+          onChange={(value) => handleInputChange('method', value)}
+          placeholder="Select method (optional)"
+          disabled={isDisabled}
+        />
+      </div>
+
+      <div className="space-y-3 p-3 bg-gray-50 rounded-md">
+        <Input
+          label="Notes"
+          type="text"
+          value={formValues.notes}
+          onChange={(value) => handleInputChange('notes', value)}
+          placeholder="Enter any notes about this payment"
+          disabled={isDisabled}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          {/* Expected Fee Card */}
+          {contract && (
+            <div className="p-2 bg-blue-50 rounded text-sm">
+              <div className="font-medium text-blue-800">Expected Fee:</div>
+              <div className="text-blue-600">
+                {expectedFee !== null
+                  ? formatCurrency(expectedFee)
+                  : (contract?.fee_type === 'percentage' ? 'Needs AUM data' : 'N/A')}
+              </div>
+              <div className="text-xs text-blue-500 mt-1">
+                {feeCalculation?.calculation_method || 
+                  (contract?.fee_type === 'flat' 
+                    ? 'Flat fee as specified in contract'
+                    : 'Enter AUM to calculate expected fee')}
+              </div>
+            </div>
+          )}
+
+          {/* Next Payment Due - Moved to backend calculations */}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default PaymentFormFields;
+```
+
+PaymentHistory.jsx
+```jsx
+import React from 'react';
+import { usePaymentHistory, useDeletePayment } from '../../hooks/usePaymentData';
+import LoadingSpinner from '../ui/LoadingSpinner';
+import EmptyState from '../ui/EmptyState';
+import ErrorDisplay from '../ui/ErrorDisplay';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import Card from '../ui/Card';
+import Button from '../ui/Button';
+import PaymentTableRow from './PaymentHistory/PaymentTableRow';
+import ExpandedPaymentDetails from './PaymentHistory/ExpandedPaymentDetails';
+import { usePaymentTableState } from './PaymentHistory/usePaymentTableState';
+import useStore from '../../store';
+
+const PaymentHistory = ({ clientId, editingPayment, onEditingPaymentChange }) => {
+  const { setDocumentViewerOpen, setSelectedDocumentUrl } = useStore();
+  
+  const {
+    page,
+    year,
+    expandedPaymentId,
+    showDeleteConfirm,
+    setPage,
+    setYear,
+    toggleExpandRow,
+    confirmDelete,
+    cancelDelete,
+    getAvailableYears
+  } = usePaymentTableState();
+
+  const {
+    data: payments = [],
+    isLoading,
+    error,
+    isPreviousData,
+  } = usePaymentHistory(clientId, { page, limit: 10, year });
+
+  const deletePaymentMutation = useDeletePayment();
+
+  const handleEdit = (payment) => {
+    onEditingPaymentChange && onEditingPaymentChange(payment);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = (paymentId) => {
+    deletePaymentMutation.mutate({ id: paymentId, clientId });
+    cancelDelete();
+  };
+
+  const handleViewFile = (payment) => {
+    if (payment.has_files) {
+      setSelectedDocumentUrl(`/api/files/payment/${payment.payment_id}`);
+      setDocumentViewerOpen(true);
+    }
+  };
+
+  const availableYears = getAvailableYears();
+
+  if (error) {
+    return (
+      <ErrorDisplay 
+        title="Error loading payment history"
+        error={error}
+      />
+    );
+  }
+
+  return (
+    <div className="animate-fade-in mt-3">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xl font-semibold text-dark-700 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-500 mr-2">
+            <path d="M19 5H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2z"></path>
+            <line x1="8" y1="2" x2="8" y2="5"></line>
+            <line x1="16" y1="2" x2="16" y2="5"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          Payment History
+        </h2>
+        <div className="flex items-center space-x-2">
+          <label className="text-sm text-dark-500">Filter by Year:</label>
+          <select
+            className="border border-light-500 rounded-md text-sm p-1.5 bg-white shadow-sm focus:ring-1 focus:ring-primary-400 focus:border-primary-400 transition-all duration-200"
+            value={year || ''}
+            onChange={(e) => setYear(e.target.value === '' ? null : e.target.value)}
+          >
+            <option value="">All Years</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-5">
+          <LoadingSpinner />
+        </div>
+      ) : payments.length === 0 ? (
+        <EmptyState 
+          title="No payment records found"
+          className="bg-white border border-light-300 p-5 rounded-lg text-center shadow-sm"
+        />
+      ) : (
+        <Card className="p-0 overflow-hidden" elevation="default" variant="default">
+          <div className="overflow-x-auto -mx-1">
+            <table className="min-w-full table-fixed border-collapse">
+              <thead>
+                <tr className="bg-light-200 border-b border-light-300">
+                  <th className="w-[2%] py-2.5 px-1 text-left text-xs font-medium text-dark-600 uppercase tracking-wider"></th>
+                  <th className="w-[11%] py-2.5 px-2 text-left text-xs font-medium text-dark-600 uppercase tracking-wider">Date</th>
+                  <th className="w-[17%] py-2.5 px-2 text-left text-xs font-medium text-dark-600 uppercase tracking-wider">Provider</th>
+                  <th className="w-[12%] py-2.5 px-2 text-left text-xs font-medium text-dark-600 uppercase tracking-wider">Period</th>
+                  <th className="w-[12%] py-2.5 px-2 text-left text-xs font-medium text-dark-600 uppercase tracking-wider">AUM</th>
+                  <th className="w-[13%] py-2.5 px-2 text-left text-xs font-medium text-dark-600 uppercase tracking-wider">Expected</th>
+                  <th className="w-[13%] py-2.5 px-2 text-left text-xs font-medium text-dark-600 uppercase tracking-wider">Actual</th>
+                  <th className="w-[14%] py-2.5 px-2 text-left text-xs font-medium text-dark-600 uppercase tracking-wider">Variance</th>
+                  <th className="w-[6%] py-2.5 px-1 text-center text-xs font-medium text-dark-600 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-light-300">
+                {payments.map((payment) => (
+                  <React.Fragment key={payment.payment_id}>
+                    <PaymentTableRow
+                      payment={payment}
+                      isExpanded={expandedPaymentId === payment.payment_id}
+                      showDeleteConfirm={showDeleteConfirm}
+                      onToggleExpand={toggleExpandRow}
+                      onEdit={handleEdit}
+                      onViewFile={handleViewFile}
+                      onConfirmDelete={handleDelete}
+                      onCancelDelete={cancelDelete}
+                      onDeleteClick={confirmDelete}
+                      isDeleting={deletePaymentMutation.isLoading}
+                    />
+                    {expandedPaymentId === payment.payment_id && (
+                      <ExpandedPaymentDetails payment={payment} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-4 py-2 bg-light-200 border-t border-light-300">
+            <div className="text-sm text-dark-500">
+              Showing {payments.length} payments
+            </div>
+            <nav className="flex items-center space-x-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage(Math.max(page - 1, 1))}
+                disabled={page === 1 || isPreviousData}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (payments.length === 10 && !isPreviousData) {
+                    setPage(page + 1);
+                  }
+                }}
+                disabled={payments.length < 10 || isPreviousData}
+              >
+                Next
+              </Button>
+            </nav>
+          </div>
+        </Card>
+      )}
+
+      <ConfirmDialog
+        isOpen={!!showDeleteConfirm}
+        title="Confirm Delete"
+        message="Are you sure you want to delete this payment? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        onConfirm={() => handleDelete(showDeleteConfirm)}
+        onCancel={cancelDelete}
+        isLoading={deletePaymentMutation.isLoading}
+      />
+    </div>
+  );
+};
+
+export default PaymentHistory;
+```
+
+PaymentHistory\ExpandedPaymentDetails.jsx
+```jsx
+import React from 'react';
+import { formatPeriodRange } from '../../../lib/dateUtils';
+import { formatCurrency } from '../../../lib/formatUtils';
+
+const ExpandedPaymentDetails = ({ payment }) => {
+  if (!payment.is_split_payment) {
+    return null;
+  }
+
+  return (
+    <tr>
+      <td className="py-0"></td>
+      <td colSpan="8" className="py-0">
+        <div className="bg-light-200 p-2 my-1 rounded-md">
+          <h4 className="text-sm font-medium text-dark-700 mb-2">
+            {formatPeriodRange(payment)}
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {payment.periods?.map((period, i) => (
+              <div
+                key={i}
+                className="bg-white p-2 rounded border border-light-300 shadow-sm"
+              >
+                <div className="text-xs text-dark-500">
+                  {period.period}
+                </div>
+                <div className="text-sm font-medium">
+                  {formatCurrency(period.amount)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+export default ExpandedPaymentDetails;
+```
+
+PaymentHistory\PaymentTableRow.jsx
+```jsx
+import React from 'react';
+import { formatDate, formatAppliedPeriod } from '../../../lib/dateUtils';
+import { formatCurrency } from '../../../lib/formatUtils';
+import StatusBadge from '../../ui/StatusBadge';
+
+const PaymentTableRow = ({ 
+  payment, 
+  isExpanded,
+  showDeleteConfirm,
+  onToggleExpand,
+  onEdit,
+  onViewFile,
+  onConfirmDelete,
+  onCancelDelete,
+  onDeleteClick,
+  isDeleting
+}) => {
+  const expectedFee = payment.expected_fee;
+  const variance = payment.variance || { status: 'unknown', message: 'N/A' };
+
+  return (
+    <tr className="hover:bg-light-200" data-payment-id={payment.payment_id}>
+      <td className="py-2 px-1">
+        {payment.is_split_payment && (
+          <button
+            className="w-6 h-6 flex items-center justify-center text-dark-400 hover:text-primary-600 transition-colors"
+            onClick={() => onToggleExpand(payment.payment_id)}
+            aria-label="Toggle payment details"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            >
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        )}
+      </td>
+      <td className="py-2 px-2 whitespace-nowrap">{formatDate(payment.received_date)}</td>
+      <td className="py-2 px-2 truncate">{payment.provider_name || 'N/A'}</td>
+      <td className="py-2 px-2 whitespace-nowrap">
+        {payment.is_split_payment ? (
+          <div className="flex items-center">
+            <span className="px-2 py-1 text-xs rounded bg-light-300 text-dark-600">Split</span>
+            <span className="ml-2 text-dark-500">
+              {payment.periods?.length || 0}
+            </span>
+          </div>
+        ) : formatAppliedPeriod(payment)}
+      </td>
+      <td className="py-2 px-2 whitespace-nowrap">
+        {payment.total_assets ? formatCurrency(payment.total_assets) : 'N/A'}
+      </td>
+      <td className="py-2 px-2 whitespace-nowrap">
+        {expectedFee !== null ? formatCurrency(expectedFee) : 'N/A'}
+      </td>
+      <td className="py-2 px-2 whitespace-nowrap font-medium">{formatCurrency(payment.actual_fee)}</td>
+      <td className="py-2 px-2">
+        <StatusBadge
+          status={variance.status}
+          label={variance.message}
+          size="md"
+        />
+      </td>
+      <td className="py-2 px-1">
+        <div className="grid grid-cols-3 gap-1 justify-items-center">
+          <div className="w-6">
+            {payment.has_files && (
+              <button
+                onClick={() => onViewFile(payment)}
+                className="text-blue-500 hover:text-blue-600 transition-colors file-indicator"
+                title="View document"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </button>
+            )}
+          </div>
+          <div className="w-6">
+            <button
+              onClick={() => onEdit(payment)}
+              className="text-dark-500 hover:text-primary-600 transition-colors"
+              aria-label="Edit payment"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+          </div>
+          <div className="w-6">
+            {showDeleteConfirm === payment.payment_id ? (
+              <div className="flex items-center">
+                <button
+                  className="text-dark-500 hover:text-status-success transition-colors"
+                  onClick={() => onConfirmDelete(payment.payment_id)}
+                  disabled={isDeleting}
+                  aria-label="Confirm delete"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </button>
+                <button
+                  className="text-dark-500 hover:text-dark-700 ml-1 transition-colors"
+                  onClick={onCancelDelete}
+                  aria-label="Cancel delete"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => onDeleteClick(payment.payment_id)}
+                className="text-dark-500 hover:text-status-error transition-colors"
+                aria-label="Delete payment"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+export default PaymentTableRow;
+```
+
+PaymentHistory\usePaymentTableState.js
+```js
+import { useState } from 'react';
+
+export const usePaymentTableState = () => {
+  const [page, setPage] = useState(1);
+  const [year, setYear] = useState(null);
+  const [expandedPaymentId, setExpandedPaymentId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+
+  const toggleExpandRow = (paymentId) => {
+    setExpandedPaymentId(expandedPaymentId === paymentId ? null : paymentId);
+  };
+
+  const confirmDelete = (paymentId) => {
+    setShowDeleteConfirm(paymentId);
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(null);
+  };
+
+  // Generate available years for filter
+  const getAvailableYears = () => {
+    const currentYear = new Date().getFullYear();
+    const availableYears = [];
+    for (let y = currentYear; y >= currentYear - 5; y--) {
+      availableYears.push(y);
+    }
+    return availableYears;
+  };
+
+  return {
+    // State
+    page,
+    year,
+    expandedPaymentId,
+    showDeleteConfirm,
+    
+    // Setters
+    setPage,
+    setYear,
+    
+    // Actions
+    toggleExpandRow,
+    confirmDelete,
+    cancelDelete,
+    
+    // Utilities
+    getAvailableYears
+  };
+};
+```
+
+PaymentInfoCard.jsx
+```jsx
+import React from 'react';
+import Card from '../ui/Card';
+import { formatCurrency } from '../../lib/formatUtils';
+import { formatDate } from '../../lib/dateUtils';
+import { MONTH_NAMES } from '../../lib/constants';
+
+const PaymentInfoCard = ({ client, contract, payments = [], isLoading }) => {
+  if (isLoading) {
+    return (
+      <Card variant="default" elevation="default">
+        <div className="pb-2">
+          <h3 className="text-base font-semibold text-dark-700 border-b border-light-300 pb-2">Payment Information</h3>
+        </div>
+        <div className="animate-pulse mt-3">
+          <div className="grid grid-cols-1 gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex justify-between py-1">
+                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  // Get latest payment data directly from payments array
+  const latestPayment = payments && payments.length > 0 ? payments[0] : null;
+
+  // Get last recorded AUM from the latest payment that has it
+  const lastRecordedAUM = payments?.find(p => p.total_assets)?.total_assets || null;
+
+  // Calculate current period based on payment schedule
+  const getCurrentPeriod = () => {
+    if (!contract) return 'N/A';
+
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0-indexed
+    const currentYear = now.getFullYear();
+
+    if (contract.payment_schedule === 'monthly') {
+      return `${MONTH_NAMES[currentMonth]} ${currentYear}`;
+    } else {
+      const currentQuarter = Math.floor(currentMonth / 3) + 1;
+      return `Q${currentQuarter} ${currentYear}`;
+    }
+  };
+
+  // Calculate expected fee based on contract and latest AUM
+  const getExpectedFee = () => {
+    if (!contract) return 'N/A';
+
+    if (contract.fee_type === 'flat' && contract.flat_rate !== null) {
+      return formatCurrency(contract.flat_rate);
+    }
+
+    if ((contract.fee_type === 'percentage' || contract.fee_type === 'percent') &&
+      contract.percent_rate !== null) {
+      if (lastRecordedAUM !== null) {
+        const fee = lastRecordedAUM * contract.percent_rate;
+        return formatCurrency(fee);
+      }
+      return 'Needs AUM data';
+    }
+
+    return 'N/A';
+  };
+
+  // Determine if payment status is due for current period
+  const isCurrentPeriodPaid = () => {
+    if (!latestPayment || !contract) return false;
+
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // Convert to 1-indexed
+    const currentYear = now.getFullYear();
+    const currentQuarter = Math.floor((now.getMonth()) / 3) + 1;
+
+    if (contract.payment_schedule === 'monthly') {
+      return latestPayment.applied_end_month === currentMonth &&
+        latestPayment.applied_end_month_year === currentYear;
+    } else {
+      return latestPayment.applied_end_quarter === currentQuarter &&
+        latestPayment.applied_end_quarter_year === currentYear;
+    }
+  };
+
+  const details = [
+    {
+      label: 'AUM',
+      value: lastRecordedAUM !== null ? formatCurrency(lastRecordedAUM) : 'No AUM data',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
+      )
+    },
+    {
+      label: 'Expected Fee',
+      value: getExpectedFee(),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="16"></line>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+        </svg>
+      )
+    },
+    {
+      label: 'Last Payment',
+      value: latestPayment ? formatDate(latestPayment.received_date) : 'No payments recorded',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+      )
+    },
+    {
+      label: 'Last Payment Amount',
+      value: latestPayment ? formatCurrency(latestPayment.actual_fee) : 'N/A',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-400">
+          <line x1="12" y1="1" x2="12" y2="23"></line>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
+      )
+    },
+    {
+      label: 'Current Period',
+      value: getCurrentPeriod(),
+      highlight: true,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-500">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+      )
+    },
+    {
+      label: 'Payment Status',
+      value: isCurrentPeriodPaid() ? 'Paid' : 'Due',
+      highlight: !isCurrentPeriodPaid(),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={!isCurrentPeriodPaid() ? 'text-amber-500' : 'text-green-500'}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      )
+    },
+  ];
+
+  return (
+    <Card variant="default" elevation="default">
+      <div className="pb-2">
+        <h3 className="text-base font-semibold text-dark-700 border-b border-light-300 pb-2">Payment Information</h3>
+      </div>
+      <dl className="grid grid-cols-1 gap-2 text-sm mt-4">
+        {details.map((item, idx) => (
+          <div
+            key={idx}
+            className={`
+              flex justify-between items-center py-1.5 px-2 -mx-2 rounded
+              ${item.highlight ? 'bg-light-200 border border-light-400' : ''}
+            `}
+          >
+            <dt className="text-dark-500 flex items-center gap-2">
+              {item.icon}
+              {item.label}
+            </dt>
+            <dd className={`font-medium ${item.highlight ? 'text-primary-600' : 'text-dark-700'}`}>
+              {item.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+};
+
+export default PaymentInfoCard;
+```
+
+SplitPaymentControls.jsx
+```jsx
+import React from 'react';
+import Select from '../ui/Select';
+
+/**
+ * Period selection controls for split payments
+ */
+const SplitPaymentControls = ({
+  isSplitPayment,
+  startPeriod,
+  endPeriod,
+  periodOptions,
+  handleSplitToggle,
+  handlePeriodChange,
+  isDisabled,
+  errors
+}) => {
+  const filteredEndPeriods = React.useMemo(() => {
+    if (!startPeriod || !periodOptions) {
+      return periodOptions || [];
+    }
+
+    // Only show periods that are after or equal to the start period
+    const startParts = startPeriod.split('-');
+    if (startParts.length !== 2) return periodOptions;
+
+    const startMonth = parseInt(startParts[0], 10);
+    const startYear = parseInt(startParts[1], 10);
+
+    return periodOptions.filter(period => {
+      const parts = period.value.split('-');
+      if (parts.length !== 2) return true;
+
+      const month = parseInt(parts[0], 10);
+      const year = parseInt(parts[1], 10);
+
+      return (year > startYear) || (year === startYear && month >= startMonth);
+    });
+  }, [startPeriod, periodOptions]);
+
+  return (
+    <div className="space-y-2 w-full">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium">Applied Period</label>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-500">Single</span>
+          <button
+            type="button"
+            className={`h-5 w-10 rounded-full relative ${isSplitPayment ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            onClick={handleSplitToggle}
+            disabled={isDisabled || !startPeriod}
+            aria-label={isSplitPayment ? 'Switch to single period' : 'Switch to split period'}
+          >
+            <div
+              className={`absolute w-3 h-3 rounded-full bg-white top-1 transition-transform ${isSplitPayment ? 'translate-x-5' : 'translate-x-1'
+                }`}
+            ></div>
+          </button>
+          <span className="text-sm text-gray-500">Split</span>
+        </div>
+      </div>
+
+      <div className={`${isSplitPayment ? 'grid grid-cols-2 gap-2' : 'w-full'}`}>
+        <Select
+          options={periodOptions || []}
+          value={startPeriod}
+          onChange={(value) => handlePeriodChange('start_period', value)}
+          placeholder="Select period"
+          disabled={isDisabled}
+          required
+          error={errors?.start_period}
+        />
+
+        {isSplitPayment && (
+          <Select
+            options={filteredEndPeriods}
+            value={endPeriod}
+            onChange={(value) => handlePeriodChange('end_period', value)}
+            placeholder="End period"
+            disabled={isDisabled || !startPeriod}
+            required
+            error={errors?.end_period}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SplitPaymentControls;
+```

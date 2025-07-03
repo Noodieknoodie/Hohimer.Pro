@@ -15,22 +15,26 @@ const sslOptions = {
   cert: process.env.SSL_CRT_FILE ? fs.readFileSync(process.env.SSL_CRT_FILE) : undefined,
 };
 
-app.use("/static/scripts", express.static(path.join(__dirname, "../lib/static/scripts")));
-app.use("/static", express.static(path.join(__dirname, "./static")));
+// Serve static files - check if they exist first
+const staticPath = path.join(__dirname, "../lib/static");
+console.log(`Serving static files from: ${staticPath}`);
 
-// Adding tabs to our app. This will setup routes to various views
-// Setup home page
-app.get("/", (req, res) => {
-  send(req, path.join(__dirname, "views", "hello.html")).pipe(res);
+// Log what files exist in the static directory
+if (fs.existsSync(staticPath)) {
+  console.log('Static files found:', fs.readdirSync(staticPath));
+}
+
+app.use("/static", express.static(staticPath));
+
+// Serve index.html for all routes
+app.get("/*splat", (req, res) => {
+  const htmlPath = path.join(__dirname, "views", "hello.html");
+  send(req, htmlPath).pipe(res);
 });
 
-// Setup the static tab
-app.get("/tab", (req, res) => {
-  send(req, path.join(__dirname, "views", "hello.html")).pipe(res);
-});
 
 // Create HTTP server
-const port = process.env.port || process.env.PORT || 3333;
+const port = process.env.PORT || process.env.port || 53000;
 
 if (sslOptions.key && sslOptions.cert) {
   https.createServer(sslOptions, app).listen(port, () => {

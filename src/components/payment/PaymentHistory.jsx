@@ -31,6 +31,24 @@ const PaymentHistory = ({ clientId, editingPayment, onEditingPaymentChange }) =>
     isPreviousData,
   } = usePaymentHistory(clientId, { page, limit: 10, year });
 
+  // Calculate variance for each payment since backend doesn't include it
+  const calculateVariance = (actual, expected) => {
+    if (!actual || !expected) return { status: 'unknown', message: 'N/A' };
+    const diff = actual - expected;
+    const percent = (diff / expected) * 100;
+    
+    if (Math.abs(diff) < 0.01) return { status: 'exact', message: 'Exact Match' };
+    if (Math.abs(percent) <= 5) return { status: 'acceptable', message: `$${diff.toFixed(2)} (${percent.toFixed(1)}%)` };
+    if (Math.abs(percent) <= 15) return { status: 'warning', message: `$${diff.toFixed(2)} (${percent.toFixed(1)}%)` };
+    return { status: 'alert', message: `$${diff.toFixed(2)} (${percent.toFixed(1)}%)` };
+  };
+
+  // Add variance to each payment
+  const paymentsWithVariance = payments.map(payment => ({
+    ...payment,
+    variance: calculateVariance(payment.actual_fee, payment.expected_fee)
+  }));
+
   const deletePaymentMutation = useDeletePayment();
 
   const handleEdit = (payment) => {
@@ -68,7 +86,7 @@ const PaymentHistory = ({ clientId, editingPayment, onEditingPaymentChange }) =>
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark-500 mr-2">
             <path d="M19 5H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2z"></path>
             <line x1="8" y1="2" x2="8" y2="5"></line>
-            <line x1="16" y1="2" x2="16" y2="5"></line>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
           Payment History
@@ -115,7 +133,7 @@ const PaymentHistory = ({ clientId, editingPayment, onEditingPaymentChange }) =>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-light-300">
-                {payments.map((payment) => (
+                {paymentsWithVariance.map((payment) => (
                   <PaymentTableRow
                     key={payment.payment_id}
                     payment={payment}
