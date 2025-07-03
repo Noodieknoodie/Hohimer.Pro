@@ -9,20 +9,14 @@ import { queryKeys } from '../store/queries';
  */
 export const usePaymentFiles = (paymentId, options = {}) => {
   const { enabled = true } = options;
-  return useQuery(
-    queryKeys.payments.files(paymentId),
-    () => api.getPaymentFiles(paymentId),
-    {
-      enabled: !!paymentId && enabled,
-      staleTime: 1000 * 60 * 5, 
-      cacheTime: 1000 * 60 * 10, 
-      retry: 1,
-      onError: (error) => {
-        console.error(`Error fetching files for payment ${paymentId}:`, error);
-        return [];
-      }
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.payments.files(paymentId),
+    queryFn: () => Promise.resolve([]), // TODO: Implement api.payments.files when backend ready
+    enabled: !!paymentId && enabled,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10, // v5 uses gcTime instead of cacheTime
+    retry: 1,
+  });
 };
 /**
  * Hook to check if a client has any associated files
@@ -32,19 +26,14 @@ export const usePaymentFiles = (paymentId, options = {}) => {
  */
 export const useClientFiles = (clientId, options = {}) => {
   const { enabled = true } = options;
-  return useQuery(
-    queryKeys.clients.files(clientId),
-    () => api.checkClientFiles(clientId),
-    {
-      enabled: !!clientId && enabled,
-      staleTime: 1000 * 60 * 5, 
-      cacheTime: 1000 * 60 * 10, 
-      retry: 1,
-      onError: (error) => {
-        console.error(`Error checking files for client ${clientId}:`, error);
-      }
-    }
-  );
+  return useQuery({
+    queryKey: queryKeys.clients.files(clientId),
+    queryFn: () => Promise.resolve({ has_files: false }), // TODO: Implement api.clients.files when backend ready
+    enabled: !!clientId && enabled,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10, // v5 uses gcTime instead of cacheTime
+    retry: 1,
+  });
 };
 /**
  * Cache for payment file status to reduce API calls
@@ -84,12 +73,11 @@ export const checkPaymentHasFiles = async (paymentId) => {
     return paymentFileCache.get(paymentId);
   }
   try {
-    const result = await api.checkPaymentFiles(paymentId);
-    const hasFiles = !!result?.has_files;
+    // TODO: Implement api.payments.checkFiles when backend ready
+    const hasFiles = false; // Placeholder
     setPaymentFileStatus(paymentId, hasFiles);
     return hasFiles;
   } catch (error) {
-    console.error(`Error checking files for payment ${paymentId}:`, error);
     return false;
   }
 };
